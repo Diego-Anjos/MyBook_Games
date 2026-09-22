@@ -1,0 +1,149 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+:root {
+  --background: #0F1C2E;
+  --foreground: #C9A84C;
+  --book-blue: #0F1C2E;
+  --book-blue-light: #1A2D45;
+  --book-gold: #C9A84C;
+  --book-paper: #F3E8D4;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-book-blue: var(--book-blue);
+  --color-book-blue-light: var(--book-blue-light);
+  --color-book-gold: var(--book-gold);
+  --color-book-paper: var(--book-paper);
+  --font-sans: var(--font-lora);
+  --font-display: var(--font-playfair);
+  --font-body: var(--font-lora);
+  --animate-drawer-in: drawer-in 0.28s ease-out;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* —— SplashScreen —— */
+@keyframes splash-title-in {
+  from {
+    opacity: 0;
+    letter-spacing: 0.38em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.22em;
+  }
+}
+
+@keyframes splash-gold-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.splash-title-reveal {
+  animation: splash-title-in 1.4s ease-out 0.4s both;
+}
+
+.splash-loader-fill {
+  background: linear-gradient(
+    90deg,
+    #8f6e24 0%,
+    #c9a84c 28%,
+    #f0e0a0 50%,
+    #c9a84c 72%,
+    #8f6e24 100%
+  );
+  background-size: 200% 100%;
+  animation: splash-gold-shimmer 1.6s linear infinite;
+  box-shadow:
+    0 0 10px rgba(201, 168, 76, 0.55),
+    inset 0 1px 0 rgba(255, 240, 180, 0.45);
+}
+
+/* Revelação L→R do status + pena escrevendo */
+@keyframes splash-writing-reveal {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes splash-quill-travel {
+  from {
+    left: 0%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@keyframes splash-quill-scribble {
+  0%,
+  100% {
+    transform: translate(-40%, -52%) rotate(-5deg) translateY(0);
+  }
+  50% {
+    transform: translate(-40%, -52%) rotate(5deg) translateY(-3px);
+  }
+}
+
+.splash-writing-reveal {
+  width: 0%;
+  animation: splash-writing-reveal var(--splash-write-duration, 2.8s)
+    ease-out var(--splash-write-delay, 0.45s) forwards;
+}
+
+.splash-quill-pen {
+  left: 0%;
+  animation:
+    splash-quill-travel var(--splash-write-duration, 2.8s) ease-out
+      var(--splash-write-delay, 0.45s) forwards,
+    splash-quill-scribble 0.38s ease-in-out var(--splash-write-delay, 0.45s)
+      infinite;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-writing-reveal {
+    animation: none;
+    width: 100%;
+  }
+
+  .splash-quill-pen {
+    animation: none;
+    left: 100%;
+    opacity: 0.85;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-lora), Georgia, serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-playfair), Georgia, serif;
+}
