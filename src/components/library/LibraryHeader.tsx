@@ -46,23 +46,31 @@ export default function LibraryHeader({
   }
 
   return (
-    <header className="relative border-b border-book-gold/25 pb-5">
-      <div className="grid grid-cols-1 items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
-        {/* Seletor de anos */}
-        <div className="flex items-center justify-center gap-2 md:justify-start">
+    <header className="relative border-b border-book-gold/25 pb-4 sm:pb-5">
+      <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:gap-4">
+        {/* Seletor de anos — scroll horizontal no telemóvel */}
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2 md:flex-1 md:justify-start">
           <button
             type="button"
             onClick={goPrev}
-            className="rounded p-1 text-book-gold/70 transition hover:text-book-gold"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-book-gold/70 transition hover:text-book-gold md:h-8 md:w-8"
             aria-label="Ano anterior"
           >
             <ChevronLeftIcon className="h-4 w-4" />
           </button>
-          <div className="flex items-center gap-2 font-display text-sm tracking-wide">
+          <div
+            className="
+              flex min-w-0 flex-1 items-center gap-3 overflow-x-auto
+              whitespace-nowrap hide-scrollbar
+              font-display text-sm tracking-wide
+              scroll-smooth
+              [-webkit-overflow-scrolling:touch]
+            "
+          >
             <button
               type="button"
               onClick={() => onYearChange(null)}
-              className={`px-1 transition ${
+              className={`inline-flex min-h-11 shrink-0 items-center px-1.5 transition md:min-h-0 ${
                 selectedYear === null
                   ? "text-book-gold"
                   : "text-book-gold/40 hover:text-book-gold/70"
@@ -75,7 +83,7 @@ export default function LibraryHeader({
                 key={year}
                 type="button"
                 onClick={() => onYearChange(year)}
-                className={`px-1 transition ${
+                className={`inline-flex min-h-11 shrink-0 items-center px-1.5 transition md:min-h-0 ${
                   selectedYear === year
                     ? "text-book-gold underline decoration-book-gold/60 underline-offset-4"
                     : "text-book-gold/45 hover:text-book-gold/75"
@@ -88,7 +96,7 @@ export default function LibraryHeader({
           <button
             type="button"
             onClick={goNext}
-            className="rounded p-1 text-book-gold/70 transition hover:text-book-gold"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-book-gold/70 transition hover:text-book-gold md:h-8 md:w-8"
             aria-label="Próximo ano"
           >
             <ChevronRightIcon className="h-4 w-4" />
@@ -96,18 +104,26 @@ export default function LibraryHeader({
         </div>
 
         {/* Título central */}
-        <div className="flex items-center justify-center gap-2.5">
+        <div className="flex shrink-0 items-center justify-center gap-2.5 order-first md:order-none">
           <FeatherIcon className="h-5 w-5 text-book-gold" />
-          <h1 className="font-display text-xl tracking-[0.12em] text-book-gold sm:text-2xl">
+          <h1 className="font-display text-lg tracking-[0.12em] text-book-gold sm:text-xl md:text-2xl">
             My Book Games
           </h1>
         </div>
 
-        {/* Navegação textual */}
-        <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 md:justify-end">
+        {/* Navegação textual — scroll horizontal no telemóvel */}
+        <nav
+          className="
+            flex min-w-0 items-center justify-start gap-x-4
+            overflow-x-auto whitespace-nowrap hide-scrollbar
+            scroll-smooth
+            [-webkit-overflow-scrolling:touch]
+            md:flex-1 md:justify-end
+          "
+        >
           <button
             type="button"
-            className={`font-body text-sm transition ${
+            className={`inline-flex min-h-11 shrink-0 items-center font-body text-sm transition md:min-h-0 ${
               activeNav === "biblioteca"
                 ? "text-book-gold"
                 : "text-book-gold/55 hover:text-book-gold"
@@ -117,7 +133,7 @@ export default function LibraryHeader({
           </button>
           <button
             type="button"
-            className={`font-body text-sm transition ${
+            className={`inline-flex min-h-11 shrink-0 items-center font-body text-sm transition md:min-h-0 ${
               activeNav === "estatisticas"
                 ? "text-book-gold"
                 : "text-book-gold/55 hover:text-book-gold"
@@ -128,7 +144,7 @@ export default function LibraryHeader({
           <button
             type="button"
             onClick={onAddGame}
-            className="font-body text-sm text-book-gold/80 transition hover:text-book-gold"
+            className="inline-flex min-h-11 shrink-0 items-center font-body text-sm text-book-gold/80 transition hover:text-book-gold md:min-h-0"
           >
             + Adicionar Novo Jogo
           </button>

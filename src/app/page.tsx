@@ -7,8 +7,9 @@ export default async function Home() {
     Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
     Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+  // Fase front-end: sem Supabase, a capa de login mockada abre a Library.
   if (!configured) {
-    return <Library userName="Visitante" />;
+    return <AuthBook />;
   }
 
   const supabase = await createClient();

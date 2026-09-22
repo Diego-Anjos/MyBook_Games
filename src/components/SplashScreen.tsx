@@ -75,9 +75,9 @@ function OrnamentedLoader({ progress }: { progress: number }) {
   const clamped = Math.min(100, Math.max(0, progress));
 
   return (
-    <div className="relative mx-auto w-full max-w-md sm:max-w-lg">
+    <div className="relative mx-auto w-full max-w-xs sm:max-w-md md:max-w-lg">
       <p
-        className="mb-3 text-center font-display text-xl tracking-[0.12em] text-book-gold tabular-nums sm:text-2xl"
+        className="mb-2 text-center font-display text-lg tracking-[0.12em] text-book-gold tabular-nums sm:mb-3 sm:text-xl md:text-2xl"
         aria-live="polite"
       >
         {Math.round(clamped)}%
@@ -87,7 +87,7 @@ function OrnamentedLoader({ progress }: { progress: number }) {
         <svg
           aria-hidden
           viewBox="0 0 28 28"
-          className="relative z-10 h-7 w-7 shrink-0 text-book-gold sm:h-8 sm:w-8"
+          className="relative z-10 h-6 w-6 shrink-0 text-book-gold sm:h-7 sm:w-7 md:h-8 md:w-8"
         >
           <defs>
             <linearGradient id="nib-l" x1="0" y1="0" x2="1" y2="1">
@@ -108,11 +108,11 @@ function OrnamentedLoader({ progress }: { progress: number }) {
 
         <div
           className="
-            relative h-3.5 flex-1 overflow-hidden rounded-sm
+            relative h-3 flex-1 overflow-hidden rounded-sm
             border border-book-gold/70
             bg-[#1a140a]/35
             shadow-[inset_0_1px_3px_rgba(0,0,0,0.35),0_0_0_1px_rgba(201,168,76,0.25)]
-            sm:h-4
+            sm:h-3.5 md:h-4
           "
         >
           <div className="pointer-events-none absolute inset-[2px] rounded-[1px] border border-book-gold/25" />
@@ -125,7 +125,7 @@ function OrnamentedLoader({ progress }: { progress: number }) {
         <svg
           aria-hidden
           viewBox="0 0 28 28"
-          className="relative z-10 h-7 w-7 shrink-0 -scale-x-100 text-book-gold sm:h-8 sm:w-8"
+          className="relative z-10 h-6 w-6 shrink-0 -scale-x-100 text-book-gold sm:h-7 sm:w-7 md:h-8 md:w-8"
         >
           <defs>
             <linearGradient id="nib-r" x1="0" y1="0" x2="1" y2="1">
@@ -152,7 +152,7 @@ function OrnamentedLoader({ progress }: { progress: number }) {
 function WritingStatusLine() {
   return (
     <div
-      className="splash-writing-stage relative mx-auto mt-8 flex justify-center px-2"
+      className="splash-writing-stage relative mx-auto mt-6 flex justify-center px-2 sm:mt-8"
       style={
         {
           "--splash-write-duration": `${WRITE_DURATION_MS}ms`,
@@ -166,8 +166,8 @@ function WritingStatusLine() {
           aria-hidden
           className="
             invisible whitespace-nowrap
-            font-display text-base italic tracking-wide text-book-gold
-            sm:text-lg
+            font-display text-sm italic tracking-wide text-book-gold
+            sm:text-base md:text-lg
           "
         >
           {STATUS_LINE}
@@ -179,7 +179,7 @@ function WritingStatusLine() {
             overflow-hidden whitespace-nowrap
           "
         >
-          <p className="font-display text-base italic tracking-wide text-book-gold sm:text-lg">
+          <p className="font-display text-sm italic tracking-wide text-book-gold sm:text-base md:text-lg">
             {STATUS_LINE}
           </p>
         </div>
@@ -272,9 +272,9 @@ export default function SplashScreen({
       <div
         className="
           relative flex w-full max-w-3xl flex-col
-          min-h-[min(78dvh,40rem)] sm:min-h-[min(72dvh,42rem)]
+          min-h-[min(72dvh,36rem)] sm:min-h-[min(72dvh,42rem)]
           rounded-sm bg-book-paper
-          px-8 py-12 sm:px-16 sm:py-16
+          px-5 py-8 sm:px-12 sm:py-12 md:px-16 md:py-16
           shadow-[0_28px_80px_rgba(0,0,0,0.65),inset_0_0_50px_rgba(201,168,76,0.07)]
         "
       >
@@ -302,22 +302,22 @@ export default function SplashScreen({
 
         <div className="relative z-10 flex flex-1 flex-col items-center justify-center">
           <div className="relative w-full">
-            <div className="relative mx-auto aspect-square w-[min(52%,15rem)] sm:w-[17rem]">
+            <div className="relative mx-auto aspect-square w-24 sm:w-28 md:w-32">
               <Image
                 src="/images/image_0.png"
                 alt="My Book Games"
                 fill
                 priority
-                sizes="272px"
+                sizes="(max-width: 768px) 96px, 128px"
                 className="object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
               />
             </div>
 
             <h1
               className="
-                mt-2 text-center font-display text-2xl tracking-[0.22em]
+                mt-2 text-center font-display text-2xl tracking-[0.18em]
                 text-book-gold uppercase
-                sm:mt-3 sm:text-3xl
+                sm:mt-3 sm:tracking-[0.22em] md:text-4xl
                 splash-title-reveal
               "
             >
@@ -325,7 +325,7 @@ export default function SplashScreen({
             </h1>
           </div>
 
-          <div className="mt-10 w-full sm:mt-12">
+          <div className="mt-8 w-full sm:mt-10 md:mt-12">
             <OrnamentedLoader progress={progress} />
           </div>
 

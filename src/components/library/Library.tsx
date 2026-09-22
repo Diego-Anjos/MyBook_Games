@@ -45,7 +45,7 @@ export default function Library({ userName }: LibraryProps) {
           className="pointer-events-none absolute inset-3 border border-book-gold/30 sm:inset-4"
         />
 
-        <div className="relative z-10 flex flex-col gap-6 p-5 sm:p-8 md:p-10">
+        <div className="relative z-10 flex flex-col gap-4 p-3 sm:gap-6 sm:p-8 md:p-10">
           <LibraryHeader
             years={LIBRARY_YEARS}
             selectedYear={selectedYear}

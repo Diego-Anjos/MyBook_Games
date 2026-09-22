@@ -1,367 +1,238 @@
 "use client";
 
-import {
-  FormEvent,
-  InputHTMLAttributes,
-  type ReactNode,
-  useMemo,
-  useState,
-} from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { FormEvent, useState, type ReactNode } from "react";
+import Image from "next/image";
+import { KeyRound, User } from "lucide-react";
+import Library from "@/components/library/Library";
 
-type PasswordStrength = 0 | 1 | 2 | 3 | 4;
-
-function getPasswordStrength(password: string): PasswordStrength {
-  if (!password) return 0;
-  let score = 0;
-  if (password.length >= 6) score += 1;
-  if (password.length >= 10) score += 1;
-  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
-  if (/\d/.test(password) || /[^A-Za-z0-9]/.test(password)) score += 1;
-  return Math.min(score, 4) as PasswordStrength;
-}
-
-function strengthLabel(strength: PasswordStrength): string {
-  switch (strength) {
-    case 0:
-      return "";
-    case 1:
-      return "Fraca";
-    case 2:
-      return "Razoável";
-    case 3:
-      return "Boa";
-    case 4:
-      return "Forte";
-  }
-}
-
-function barColor(index: number, strength: PasswordStrength): string {
-  if (index >= strength) return "bg-book-gold/20";
-  if (strength <= 2) return "bg-yellow-400";
-  return "bg-emerald-500";
-}
-
-const underlineInputClass =
-  "w-full bg-transparent py-2 font-body text-book-paper placeholder:text-book-gold/40 outline-none border-0 border-b border-book-gold/60 focus:border-book-gold transition-colors";
-
-function GoldButton({
-  children,
-  disabled,
-  type = "submit",
-}: {
-  children: ReactNode;
-  disabled?: boolean;
-  type?: "submit" | "button";
-}) {
+function CornerFiligree({ className }: { className?: string }) {
   return (
-    <button
-      type={type}
-      disabled={disabled}
-      className="
-        mt-2 w-full rounded-sm px-6 py-3
-        font-display text-sm tracking-[0.2em] uppercase
-        text-book-blue
-        bg-gradient-to-b from-[#E8D08A] via-book-gold to-[#A8842E]
-        shadow-[0_4px_14px_rgba(201,168,76,0.35)]
-        transition hover:brightness-110
-        disabled:cursor-not-allowed disabled:opacity-50
-      "
+    <svg
+      aria-hidden
+      viewBox="0 0 48 48"
+      className={`pointer-events-none absolute h-8 w-8 text-book-gold sm:h-11 sm:w-11 ${className}`}
+      fill="none"
     >
-      {children}
-    </button>
+      <path
+        d="M4 28 V10 H22"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 18 Q14 14 18 4"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <circle cx="8" cy="12" r="1.4" fill="currentColor" />
+      <path
+        d="M10 22 C14 18 20 14 26 12"
+        stroke="currentColor"
+        strokeWidth="0.9"
+        opacity="0.55"
+      />
+    </svg>
   );
 }
 
-function Field({
-  label,
+function IconField({
   id,
-  ...props
-}: { label: string; id: string } & InputHTMLAttributes<HTMLInputElement>) {
+  label,
+  type,
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+  icon,
+}: {
+  id: string;
+  label: string;
+  type: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  autoComplete: string;
+  icon: ReactNode;
+}) {
   return (
-    <label htmlFor={id} className="flex flex-col gap-1">
-      <span className="font-display text-xs tracking-[0.15em] text-book-gold/80 uppercase">
-        {label}
-      </span>
-      <input id={id} className={underlineInputClass} {...props} />
+    <label htmlFor={id} className="group flex flex-col gap-1.5">
+      <span className="sr-only">{label}</span>
+      <div className="relative">
+        <input
+          id={id}
+          type={type}
+          autoComplete={autoComplete}
+          required
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="
+            w-full min-h-11 bg-transparent py-2.5 pr-10 font-body
+            text-base text-book-paper placeholder:text-book-gold/45
+            outline-none border-0 border-b border-book-gold/50
+            focus:border-book-gold transition-colors
+          "
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 text-book-gold/80"
+        >
+          {icon}
+        </span>
+      </div>
     </label>
   );
 }
 
-function PasswordStrengthMeter({ password }: { password: string }) {
-  const strength = useMemo(() => getPasswordStrength(password), [password]);
-  const label = strengthLabel(strength);
-
-  return (
-    <div className="mt-2 space-y-1.5" aria-live="polite">
-      <div className="flex gap-1.5" role="meter" aria-valuenow={strength} aria-valuemin={0} aria-valuemax={4} aria-label="Força da senha">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={`h-1.5 flex-1 rounded-sm transition-colors ${barColor(i, strength)}`}
-          />
-        ))}
-      </div>
-      {label ? (
-        <p className="font-body text-xs text-book-gold/70">{label}</p>
-      ) : null}
-    </div>
-  );
-}
-
 export default function AuthBook() {
-  const router = useRouter();
-
-  const [loginIdentifier, setLoginIdentifier] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginLoading, setLoginLoading] = useState(false);
-
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [signUpError, setSignUpError] = useState<string | null>(null);
-  const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
-  const [signUpLoading, setSignUpLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const [userName, setUserName] = useState("Leitor");
 
   async function handleLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoginError(null);
     setLoginLoading(true);
 
-    try {
-      const supabase = createClient();
-      const identifier = loginIdentifier.trim();
+    // Mock: qualquer e-mail/senha abre a biblioteca após um breve loading.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
 
-      // Supabase Auth autentica por e-mail; usuário sem "@" é tratado como e-mail inválido.
-      if (!identifier.includes("@")) {
-        setLoginError("Informe o e-mail cadastrado para acessar a biblioteca.");
-        return;
-      }
+    const local = email.trim().split("@")[0] || "Leitor";
+    const display =
+      local.charAt(0).toUpperCase() + local.slice(1).replace(/[._-]/g, " ");
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: identifier,
-        password: loginPassword,
-      });
-
-      if (error) {
-        setLoginError(error.message);
-        return;
-      }
-
-      router.refresh();
-    } catch (err) {
-      setLoginError(
-        err instanceof Error ? err.message : "Não foi possível entrar.",
-      );
-    } finally {
-      setLoginLoading(false);
-    }
+    setUserName(display);
+    setLoginLoading(false);
+    setEntered(true);
   }
 
-  async function handleSignUp(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSignUpError(null);
-    setSignUpSuccess(null);
-
-    if (password !== confirmPassword) {
-      setSignUpError("As senhas não coincidem.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setSignUpError("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    setSignUpLoading(true);
-
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-          },
-        },
-      });
-
-      if (error) {
-        setSignUpError(error.message);
-        return;
-      }
-
-      if (data.session) {
-        router.refresh();
-        router.push("/");
-        return;
-      }
-
-      setSignUpSuccess(
-        "Página criada. Verifique seu e-mail para confirmar o cadastro.",
-      );
-    } catch (err) {
-      setSignUpError(
-        err instanceof Error ? err.message : "Não foi possível cadastrar.",
-      );
-    } finally {
-      setSignUpLoading(false);
-    }
+  if (entered) {
+    return <Library userName={userName} />;
   }
 
   return (
-    <div
-      className="
-        relative overflow-hidden rounded-sm bg-book-blue text-book-gold
-        shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.35)]
-      "
-    >
-      {/* Bordas duplas da capa */}
+    <div className="mx-auto flex w-[95%] justify-center sm:w-[90%] md:w-full md:max-w-md">
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-2 border border-book-gold/50 sm:inset-3"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-3 border border-book-gold/30 sm:inset-4"
-      />
-
-      {/* Lombada central */}
-      <div
-        aria-hidden
         className="
-          pointer-events-none absolute top-6 bottom-6 left-1/2 z-20 hidden w-px
-          -translate-x-1/2 bg-gradient-to-b from-transparent via-book-gold/50 to-transparent
-          md:block
+          relative flex min-h-[min(90dvh,34rem)] w-full flex-col overflow-hidden
+          rounded-sm bg-book-blue text-book-gold
+          shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.4)]
+          sm:min-h-[600px]
         "
-      />
+      >
+        {/* Lombada — borda esquerda */}
+        <div
+          aria-hidden
+          className="
+            pointer-events-none absolute inset-y-0 left-0 z-20 w-4
+            bg-gradient-to-r from-black/55 via-black/25 to-transparent
+            sm:w-6
+          "
+        />
+        <div
+          aria-hidden
+          className="
+            pointer-events-none absolute inset-y-4 left-[6px] z-20 w-px
+            bg-gradient-to-b from-transparent via-book-gold/35 to-transparent
+            sm:left-2
+          "
+        />
 
-      <div className="relative z-10 grid md:grid-cols-2">
-        {/* Página esquerda — Login */}
-        <section className="flex flex-col border-b border-book-gold/25 p-8 sm:p-10 md:border-b-0 md:border-r md:border-book-gold/25 md:p-12">
-          <header className="mb-8 text-center md:mb-10">
-            <p className="font-display text-[0.65rem] tracking-[0.35em] text-book-gold/60 uppercase">
-              My Book Games
-            </p>
-            <h1 className="mt-3 font-display text-2xl tracking-wide text-book-gold sm:text-3xl">
+        {/* Borda dupla dourada */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-2 border border-book-gold/55 sm:inset-3"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-3 border border-book-gold/30 sm:inset-[14px]"
+        />
+
+        <CornerFiligree className="top-3 left-3 sm:top-5 sm:left-5" />
+        <CornerFiligree className="top-3 right-3 rotate-90 sm:top-5 sm:right-5" />
+        <CornerFiligree className="bottom-3 left-3 -rotate-90 sm:bottom-5 sm:left-5" />
+        <CornerFiligree className="right-3 bottom-3 rotate-180 sm:right-5 sm:bottom-5" />
+
+        <div className="relative z-10 flex flex-1 flex-col px-6 py-8 sm:px-10 sm:py-12 md:px-12 md:py-14">
+          <header className="mb-6 flex flex-col items-center text-center sm:mb-10">
+            <div className="relative h-24 w-24 sm:h-28 sm:w-28 md:h-32 md:w-32">
+              <Image
+                src="/images/image_0.png"
+                alt="My Book Games"
+                fill
+                priority
+                sizes="(max-width: 768px) 96px, 128px"
+                className="object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.4)]"
+              />
+            </div>
+            <h1 className="mt-3 font-display text-2xl tracking-wide text-book-gold sm:mt-5 sm:text-3xl">
               Acessar Biblioteca
             </h1>
-            <div className="mx-auto mt-4 h-px w-16 bg-gradient-to-r from-transparent via-book-gold to-transparent" />
+            <div className="mx-auto mt-3 h-px w-16 bg-gradient-to-r from-transparent via-book-gold to-transparent sm:mt-4 sm:w-20" />
           </header>
 
-          <form onSubmit={handleLogin} className="flex flex-1 flex-col gap-6">
-            <Field
-              id="login-identifier"
-              label="E-mail ou Usuário"
-              type="text"
-              autoComplete="username"
-              required
-              value={loginIdentifier}
-              onChange={(e) => setLoginIdentifier(e.target.value)}
-              placeholder="seu@email.com"
+          <form
+            onSubmit={handleLogin}
+            className="mx-auto flex w-full max-w-xs flex-1 flex-col justify-center gap-5 sm:gap-8"
+          >
+            <IconField
+              id="login-email"
+              label="E-mail"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="E-mail"
+              icon={<User className="h-4 w-4" strokeWidth={1.75} />}
             />
-            <Field
+            <IconField
               id="login-password"
               label="Senha"
               type="password"
               autoComplete="current-password"
-              required
-              value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              placeholder="••••••••"
+              value={password}
+              onChange={setPassword}
+              placeholder="Senha"
+              icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
             />
 
-            {loginError ? (
-              <p className="font-body text-sm text-red-300/90" role="alert">
-                {loginError}
-              </p>
-            ) : null}
+            <div className="mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-4">
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="
+                  flex min-h-11 w-full items-center justify-center rounded-md px-6
+                  font-display text-sm font-bold tracking-[0.18em] uppercase
+                  text-book-blue
+                  bg-gradient-to-r from-[#C9A84C] to-[#E5C97A]
+                  shadow-[0_4px_16px_rgba(201,168,76,0.35)]
+                  transition duration-200
+                  hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(201,168,76,0.5)]
+                  hover:brightness-105
+                  disabled:cursor-not-allowed disabled:opacity-60
+                  disabled:hover:translate-y-0 disabled:hover:shadow-[0_4px_16px_rgba(201,168,76,0.35)]
+                "
+              >
+                {loginLoading ? "Abrindo…" : "Entrar"}
+              </button>
 
-            <GoldButton disabled={loginLoading}>
-              {loginLoading ? "Abrindo…" : "Entrar"}
-            </GoldButton>
-          </form>
-        </section>
-
-        {/* Página direita — Cadastro */}
-        <section className="flex flex-col p-8 sm:p-10 md:p-12">
-          <header className="mb-8 text-center md:mb-10">
-            <p className="font-display text-[0.65rem] tracking-[0.35em] text-book-gold/60 uppercase">
-              Novo capítulo
-            </p>
-            <h2 className="mt-3 font-display text-2xl tracking-wide text-book-gold sm:text-3xl">
-              Criar Nova Página
-            </h2>
-            <div className="mx-auto mt-4 h-px w-16 bg-gradient-to-r from-transparent via-book-gold to-transparent" />
-          </header>
-
-          <form onSubmit={handleSignUp} className="flex flex-1 flex-col gap-5">
-            <Field
-              id="signup-name"
-              label="Nome Completo"
-              type="text"
-              autoComplete="name"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Seu nome"
-            />
-            <Field
-              id="signup-email"
-              label="E-mail"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-            />
-            <div>
-              <Field
-                id="signup-password"
-                label="Criar Senha"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-              <PasswordStrengthMeter password={password} />
+              <a
+                href="#esqueceu-senha"
+                className="
+                  inline-flex min-h-11 items-center font-body text-sm text-book-paper/75
+                  underline-offset-4 decoration-book-gold/30
+                  transition hover:text-book-gold hover:underline
+                "
+                onClick={(e) => e.preventDefault()}
+              >
+                Esqueceu a senha?
+              </a>
             </div>
-            <Field
-              id="signup-confirm"
-              label="Confirmar Senha"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={6}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-
-            {signUpError ? (
-              <p className="font-body text-sm text-red-300/90" role="alert">
-                {signUpError}
-              </p>
-            ) : null}
-            {signUpSuccess ? (
-              <p className="font-body text-sm text-emerald-300/90" role="status">
-                {signUpSuccess}
-              </p>
-            ) : null}
-
-            <GoldButton disabled={signUpLoading}>
-              {signUpLoading ? "Registrando…" : "Cadastrar"}
-            </GoldButton>
           </form>
-        </section>
+        </div>
       </div>
     </div>
   );
