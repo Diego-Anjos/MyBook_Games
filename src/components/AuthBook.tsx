@@ -3,13 +3,14 @@
 import {
   FormEvent,
   forwardRef,
+  useEffect,
   useRef,
   useState,
   type ComponentType,
   type ReactNode,
 } from "react";
-import dynamic from "next/dynamic";
 import Image from "next/image";
+import HTMLFlipBook from "react-pageflip";
 import {
   AtSign,
   Calendar,
@@ -33,39 +34,18 @@ const BOOK_HEIGHT = 720;
 
 type FlipBookHandle = {
   pageFlip: () => {
+    flip: (page: number) => void;
     flipNext: () => void;
     flipPrev: () => void;
+    turnToPage: (page: number) => void;
   } | null;
 };
 
-/** react-pageflip não suporta SSR — carrega só no cliente, com ref encaminhada. */
-const HTMLFlipBook = dynamic(
-  () =>
-    import("react-pageflip").then((mod) => {
-      const Book = mod.default as ComponentType<
-        Record<string, unknown> & { children?: ReactNode }
-      >;
-      return forwardRef<FlipBookHandle, Record<string, unknown>>(
-        function DynamicFlipBook(props, ref) {
-          return <Book ref={ref} {...props} />;
-        },
-      );
-    }),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="
-          flex items-center justify-center rounded-sm bg-book-blue text-book-gold
-          shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.4)]
-        "
-        style={{ width: BOOK_WIDTH, height: BOOK_HEIGHT }}
-      >
-        <p className="font-body text-sm text-book-gold/60">Abrindo a capa…</p>
-      </div>
-    ),
-  },
-);
+/** Índice da página final de transição (Page 2). */
+const TRANSITION_PAGE_INDEX = 2;
+
+type OpenLibraryFrom = "login" | "register";
+
 function CornerFiligree({ className }: { className?: string }) {
   return (
     <svg
@@ -119,16 +99,16 @@ function BookFaceChrome() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-2 border border-book-gold/55 sm:inset-3"
+        className="pointer-events-none absolute inset-2 z-20 border border-book-gold/55 sm:inset-3"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-3 border border-book-gold/30 sm:inset-[14px]"
+        className="pointer-events-none absolute inset-3 z-20 border border-book-gold/30 sm:inset-[14px]"
       />
-      <CornerFiligree className="top-3 left-3 sm:top-5 sm:left-5" />
-      <CornerFiligree className="top-3 right-3 rotate-90 sm:top-5 sm:right-5" />
-      <CornerFiligree className="bottom-3 left-3 -rotate-90 sm:bottom-5 sm:left-5" />
-      <CornerFiligree className="right-3 bottom-3 rotate-180 sm:right-5 sm:bottom-5" />
+      <CornerFiligree className="top-3 left-3 z-20 sm:top-5 sm:left-5" />
+      <CornerFiligree className="top-3 right-3 z-20 rotate-90 sm:top-5 sm:right-5" />
+      <CornerFiligree className="bottom-3 left-3 z-20 -rotate-90 sm:bottom-5 sm:left-5" />
+      <CornerFiligree className="right-3 bottom-3 z-20 rotate-180 sm:right-5 sm:bottom-5" />
     </>
   );
 }
@@ -152,7 +132,9 @@ const Page = forwardRef<HTMLDivElement, PageProps>(function Page(
       "
     >
       <BookFaceChrome />
-      <div className="relative z-10 flex h-full flex-col">{children}</div>
+      <div className="relative z-30 flex h-full flex-col pointer-events-auto">
+        {children}
+      </div>
     </div>
   );
 });
@@ -166,6 +148,7 @@ function IconField({
   placeholder,
   autoComplete,
   icon,
+  required = true,
 }: {
   id: string;
   label: string;
@@ -175,6 +158,7 @@ function IconField({
   placeholder: string;
   autoComplete: string;
   icon: ReactNode;
+  required?: boolean;
 }) {
   return (
     <label htmlFor={id} className="group flex flex-col gap-1.5">
@@ -184,7 +168,7 @@ function IconField({
           id={id}
           type={type}
           autoComplete={autoComplete}
-          required
+          required={required}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -318,13 +302,182 @@ const ctaButtonClassName = `
 `;
 
 const textLinkClassName = `
-  inline-flex min-h-11 items-center font-body text-sm text-book-paper/75
+  relative z-40 inline-flex min-h-11 items-center font-body text-sm text-book-paper/75
   underline-offset-4 decoration-book-gold/30
   transition hover:text-book-gold hover:underline
 `;
 
+function BookLoadingPlaceholder() {
+  return (
+    <div
+      className="
+        flex items-center justify-center rounded-sm bg-book-blue text-book-gold
+        shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.4)]
+      "
+      style={{ width: BOOK_WIDTH, height: BOOK_HEIGHT }}
+    >
+      <p className="font-body text-sm text-book-gold/60">Abrindo a capa…</p>
+    </div>
+  );
+}
+
+/** Conteúdo da folha de transição (Page 2 / Page 1 durante isTransitioning). */
+function TransitionFace() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
+      <div className="relative h-24 w-24 sm:h-28 sm:w-28">
+        <Image
+          src="/images/image_0.png"
+          alt=""
+          fill
+          sizes="112px"
+          className="object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.4)]"
+        />
+      </div>
+      <p className="font-display text-sm tracking-[0.18em] text-book-gold uppercase sm:text-base">
+        Abrindo a biblioteca…
+      </p>
+      <div className="h-px w-16 bg-gradient-to-r from-transparent via-book-gold to-transparent" />
+    </div>
+  );
+}
+
+function TermsFooter({ onOpen }: { onOpen: () => void }) {
+  return (
+    <p className="mt-8 text-center font-body text-xs text-book-gold/50">
+      Ao prosseguir, você concorda com o nosso{" "}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onOpen();
+        }}
+        className="underline underline-offset-2 transition-colors hover:text-book-gold"
+      >
+        Pacto de Leitura (Termos de Uso)
+      </button>
+      .
+    </p>
+  );
+}
+
+function TermsModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm sm:p-8"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="terms-modal-title"
+    >
+      <button
+        type="button"
+        aria-label="Fechar pacto de leitura"
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+
+      <div
+        className="
+          relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col
+          bg-book-paper shadow-[0_0_40px_rgba(0,0,0,0.8)]
+        "
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-2 border border-book-gold/40"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-3 border border-book-gold/40"
+        />
+
+        <CornerFiligree className="top-4 left-4 z-10 sm:top-5 sm:left-5" />
+        <CornerFiligree className="top-4 right-4 z-10 rotate-90 sm:top-5 sm:right-5" />
+        <CornerFiligree className="bottom-4 left-4 z-10 -rotate-90 sm:bottom-5 sm:left-5" />
+        <CornerFiligree className="right-4 bottom-4 z-10 rotate-180 sm:right-5 sm:bottom-5" />
+
+        <div className="relative z-10 overflow-y-auto hide-scrollbar p-10">
+          <h2
+            id="terms-modal-title"
+            className="mb-6 text-center font-display text-3xl text-book-blue"
+          >
+            O Pacto de Leitura
+          </h2>
+
+          <div className="space-y-4 font-body leading-relaxed text-book-blue/80">
+            <p>
+              Bem-vindo à My Book Games. Este catálogo é o seu refúgio pessoal
+              para guardar memórias de jogatinas passadas e futuras.
+            </p>
+
+            <section>
+              <h3 className="mb-2 font-display text-lg text-book-blue">
+                Os Manuscritos Pessoais
+              </h3>
+              <p>
+                As resenhas, notas e narrativas que você registra neste diário
+                são de sua autoria e propriedade. O catálogo existe para
+                preservar a sua voz — não para reclamá-la.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="mb-2 font-display text-lg text-book-blue">
+                O Silêncio da Biblioteca
+              </h3>
+              <p>
+                Use a plataforma com respeito: guarde apenas o que for seu,
+                evite abusos e trate este espaço como um salão de leitura —
+                tranquilo, pessoal e dedicado às histórias que você escolhe
+                contar.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="mb-2 font-display text-lg text-book-blue">
+                O Selo de Cera (Privacidade)
+              </h3>
+              <p>
+                Seus dados de acesso — em especial o e-mail — são guardados com
+                segurança, sob o nosso selo. Não os compartilhamos com terceiros
+                nem os usamos fora do propósito de manter a sua ficha de leitor.
+              </p>
+            </section>
+          </div>
+
+          <hr className="my-6 border-book-gold/30" />
+
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={onClose}
+              className="
+                mt-4 bg-gradient-to-r from-[#C9A84C] to-[#E5C97A]
+                px-8 py-3 font-display tracking-widest text-book-blue uppercase
+                shadow-md transition-transform hover:-translate-y-0.5
+              "
+            >
+              Assinar e Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AuthBook() {
   const bookRef = useRef<FlipBookHandle>(null);
+  const [clientReady, setClientReady] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -333,59 +486,102 @@ export default function AuthBook() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [platform, setPlatform] = useState<Platform>("pc");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [entered, setEntered] = useState(false);
   const [userName, setUserName] = useState("Leitor");
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
 
-  function flipToRegister() {
-    bookRef.current?.pageFlip()?.flipNext();
-  }
-
-  function flipToLogin() {
-    bookRef.current?.pageFlip()?.flipPrev();
-  }
+  useEffect(() => {
+    setClientReady(true);
+  }, []);
 
   function enterLibrary(displayName: string) {
     setUserName(displayName);
     setLoginLoading(false);
+    setRegisterLoading(false);
+    setIsTransitioning(false);
     setEntered(true);
   }
 
-  async function handleLogin(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoginLoading(true);
+  /**
+   * Flip animado até a transição; só então desmonta e abre a Library.
+   * No Login: oculta o cadastro (isTransitioning) e vira 1 folha (flipNext),
+   * evitando que o formulário de cadastro apareça no meio da animação.
+   */
+  function openLibraryWithPageFlip(
+    displayName: string,
+    from: OpenLibraryFrom,
+  ) {
+    setIsTransitioning(true);
 
-    // Mock: qualquer e-mail/senha abre a biblioteca após um breve loading.
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const runFlip = () => {
+      const flipApi = bookRef.current?.pageFlip?.();
+      if (!flipApi) return;
 
-    const local = email.trim().split("@")[0] || "Leitor";
-    const display =
-      local.charAt(0).toUpperCase() + local.slice(1).replace(/[._-]/g, " ");
+      if (from === "login") {
+        // Page 1 já mostra TransitionFace; uma folha à frente basta.
+        flipApi.flipNext();
+      } else if (typeof flipApi.flipNext === "function") {
+        flipApi.flipNext();
+      } else if (typeof flipApi.flip === "function") {
+        flipApi.flip(TRANSITION_PAGE_INDEX);
+      }
 
-    enterLibrary(display);
+      window.setTimeout(() => {
+        enterLibrary(displayName);
+      }, 3000);
+    };
+
+    // Aguarda o React pintar a Page 1 sem o formulário de cadastro.
+    window.requestAnimationFrame(() => {
+      window.setTimeout(runFlip, 40);
+    });
   }
 
-  async function handleRegister(e: FormEvent<HTMLFormElement>) {
+  function handleLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (password !== confirmPassword) return;
+    if (loginLoading || isTransitioning) return;
 
     setLoginLoading(true);
 
-    // Mock: cadastro local abre a biblioteca após um breve loading.
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const emailValue = email.trim();
+    const nextUserName = emailValue.split("@")[0] || "Leitor";
 
-    const display =
+    openLibraryWithPageFlip(nextUserName, "login");
+  }
+
+  function handleRegister(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (loginLoading || registerLoading || isTransitioning) return;
+
+    const capturedName =
       name.trim() || nickName.trim() || email.trim().split("@")[0] || "Leitor";
 
-    enterLibrary(display);
+    setRegisterLoading(true);
+    openLibraryWithPageFlip(capturedName, "register");
   }
 
   if (entered) {
     return <Library userName={userName} />;
   }
 
+  if (!clientReady) {
+    return (
+      <div className="mx-auto flex w-full justify-center px-3 sm:px-4">
+        <BookLoadingPlaceholder />
+      </div>
+    );
+  }
+
+  const FlipBook = HTMLFlipBook as unknown as ComponentType<
+    Record<string, unknown> & { children?: ReactNode }
+  >;
+
   return (
+    <>
     <div className="mx-auto flex w-full justify-center px-3 sm:px-4">
-      <HTMLFlipBook
+      <FlipBook
         ref={bookRef}
         className="auth-html-book mx-auto"
         style={{}}
@@ -407,7 +603,7 @@ export default function AuthBook() {
         autoSize={false}
         startZIndex={0}
       >
-        {/* Página 1 — Login */}
+        {/* Page 0 — Login */}
         <Page>
           <div className="flex h-full flex-col px-6 py-8 sm:px-10 sm:py-12">
             <FaceHeader title="Acessar Biblioteca" />
@@ -424,6 +620,7 @@ export default function AuthBook() {
                 value={email}
                 onChange={setEmail}
                 placeholder="E-mail"
+                required={false}
                 icon={<User className="h-4 w-4" strokeWidth={1.75} />}
               />
               <IconField
@@ -434,16 +631,17 @@ export default function AuthBook() {
                 value={password}
                 onChange={setPassword}
                 placeholder="Senha"
+                required={false}
                 icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
               />
 
-              <div className="mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-4">
+              <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-4">
                 <button
                   type="submit"
-                  disabled={loginLoading}
+                  disabled={loginLoading || isTransitioning}
                   className={ctaButtonClassName}
                 >
-                  {loginLoading ? "Abrindo…" : "Entrar"}
+                  {loginLoading ? "Abrindo biblioteca…" : "Entrar"}
                 </button>
 
                 <a
@@ -456,116 +654,146 @@ export default function AuthBook() {
 
                 <button
                   type="button"
-                  onClick={flipToRegister}
-                  className={textLinkClassName}
+                  disabled={isTransitioning}
+                  className="text-sm text-book-gold/80 hover:text-book-gold mt-6 tracking-wide underline-offset-4 hover:underline z-50 relative"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (bookRef.current && typeof bookRef.current.pageFlip === "function") {
+                      bookRef.current.pageFlip()?.flip(1);
+                    }
+                  }}
                 >
                   Novo leitor? Criar ficha de acesso
                 </button>
+
+                <TermsFooter onOpen={() => setIsTermsOpen(true)} />
               </div>
             </form>
           </div>
         </Page>
 
-        {/* Página 2 — Cadastro */}
+        {/* Page 1 — Cadastro (vira TransitionFace durante isTransitioning) */}
         <Page>
-          <div className="flex h-full flex-col px-5 py-6 sm:px-9 sm:py-9">
-            <FaceHeader title="Nova Ficha de Leitor" compact />
+          {isTransitioning ? (
+            <TransitionFace />
+          ) : (
+            <div className="flex h-full flex-col px-5 py-6 sm:px-9 sm:py-9">
+              <FaceHeader title="Nova Ficha de Leitor" compact />
 
-            <form
-              onSubmit={handleRegister}
-              className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-3.5 sm:gap-4"
-            >
-              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
+              <form
+                onSubmit={handleRegister}
+                className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-3.5 sm:gap-4"
+              >
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
+                  <IconField
+                    id="register-name"
+                    label="Nome"
+                    type="text"
+                    autoComplete="name"
+                    value={name}
+                    onChange={setName}
+                    placeholder="Nome"
+                    icon={<User className="h-4 w-4" strokeWidth={1.75} />}
+                  />
+                  <IconField
+                    id="register-nickname"
+                    label="NickName"
+                    type="text"
+                    autoComplete="username"
+                    value={nickName}
+                    onChange={setNickName}
+                    placeholder="NickName"
+                    icon={<AtSign className="h-4 w-4" strokeWidth={1.75} />}
+                  />
+                </div>
+
                 <IconField
-                  id="register-name"
-                  label="Nome"
-                  type="text"
-                  autoComplete="name"
-                  value={name}
-                  onChange={setName}
-                  placeholder="Nome"
-                  icon={<User className="h-4 w-4" strokeWidth={1.75} />}
+                  id="register-birthdate"
+                  label="Data de Nascimento"
+                  type="date"
+                  autoComplete="bday"
+                  value={birthDate}
+                  onChange={setBirthDate}
+                  placeholder="Data de Nascimento"
+                  icon={<Calendar className="h-4 w-4" strokeWidth={1.75} />}
                 />
+
                 <IconField
-                  id="register-nickname"
-                  label="NickName"
-                  type="text"
-                  autoComplete="username"
-                  value={nickName}
-                  onChange={setNickName}
-                  placeholder="NickName"
-                  icon={<AtSign className="h-4 w-4" strokeWidth={1.75} />}
+                  id="register-email"
+                  label="E-mail"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={setEmail}
+                  placeholder="E-mail"
+                  icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
                 />
-              </div>
 
-              <IconField
-                id="register-birthdate"
-                label="Data de Nascimento"
-                type="date"
-                autoComplete="bday"
-                value={birthDate}
-                onChange={setBirthDate}
-                placeholder="Data de Nascimento"
-                icon={<Calendar className="h-4 w-4" strokeWidth={1.75} />}
-              />
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
+                  <IconField
+                    id="register-password"
+                    label="Senha"
+                    type="password"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={setPassword}
+                    placeholder="Senha"
+                    icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
+                  />
+                  <IconField
+                    id="register-confirm-password"
+                    label="Confirmar Senha"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    placeholder="Confirmar Senha"
+                    icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
+                  />
+                </div>
 
-              <IconField
-                id="register-email"
-                label="E-mail"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={setEmail}
-                placeholder="E-mail"
-                icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
-              />
+                <PlatformPicker value={platform} onChange={setPlatform} />
 
-              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
-                <IconField
-                  id="register-password"
-                  label="Senha"
-                  type="password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={setPassword}
-                  placeholder="Senha"
-                  icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
-                />
-                <IconField
-                  id="register-confirm-password"
-                  label="Confirmar Senha"
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  placeholder="Confirmar Senha"
-                  icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
-                />
-              </div>
+                <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-3.5">
+                  <button
+                    type="submit"
+                    disabled={registerLoading || loginLoading || isTransitioning}
+                    className={ctaButtonClassName}
+                  >
+                    {registerLoading ? "Abrindo biblioteca…" : "Cadastrar"}
+                  </button>
 
-              <PlatformPicker value={platform} onChange={setPlatform} />
+                  <button
+                    type="button"
+                    disabled={isTransitioning}
+                    className="text-sm text-book-gold/80 hover:text-book-gold mt-6 tracking-wide underline-offset-4 hover:underline z-50 relative"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (bookRef.current && typeof bookRef.current.pageFlip === "function") {
+                        bookRef.current.pageFlip()?.turnToPage(0);
+                      }
+                    }}
+                  >
+                    Já possui uma ficha? Acessar
+                  </button>
 
-              <div className="mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-3.5">
-                <button
-                  type="submit"
-                  disabled={loginLoading}
-                  className={ctaButtonClassName}
-                >
-                  {loginLoading ? "Registrando…" : "Cadastrar"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={flipToLogin}
-                  className={textLinkClassName}
-                >
-                  Já possui uma ficha? Acessar
-                </button>
-              </div>
-            </form>
-          </div>
+                  <TermsFooter onOpen={() => setIsTermsOpen(true)} />
+                </div>
+              </form>
+            </div>
+          )}
         </Page>
-      </HTMLFlipBook>
+
+        {/* Page 2 — Transição */}
+        <Page>
+          <TransitionFace />
+        </Page>
+      </FlipBook>
     </div>
+
+    <TermsModal open={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
+    </>
   );
 }

@@ -51,6 +51,7 @@ export default function Library({ userName }: LibraryProps) {
             selectedYear={selectedYear}
             onYearChange={setSelectedYear}
             onAddGame={() => setAddOpen(true)}
+            nickname={userName ?? "Leitor"}
           />
 
           {userName ? (

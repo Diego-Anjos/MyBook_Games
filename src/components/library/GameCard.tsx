@@ -1,44 +1,49 @@
 import Image from "next/image";
 import type { Game } from "@/data/mock-games";
-import { CalendarIcon, ClockIcon } from "@/components/icons";
 
 type GameCardProps = {
   game: Game;
-  compact?: boolean;
-  /** `stack` = cartão horizontal maior (mobile, 1–2 por página). */
-  layout?: "grid" | "stack";
 };
 
 function CornerOrnament({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className={`pointer-events-none absolute h-3 w-3 border-book-gold/70 ${className}`}
+      className={`pointer-events-none absolute h-2.5 w-2.5 border-book-gold/60 sm:h-3 sm:w-3 ${className}`}
     />
   );
 }
 
-export default function GameCard({
-  game,
-  compact = false,
-  layout = "grid",
-}: GameCardProps) {
-  const stacked = layout === "stack";
-  const coverSize = stacked
-    ? "h-24 w-24 sm:h-28 sm:w-28"
-    : compact
-      ? "h-16 w-16 sm:h-20 sm:w-20"
-      : "h-28 w-28 sm:h-32 sm:w-32";
+function SpecCell({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 px-2 py-1.5 sm:px-2.5 sm:py-2">
+      <span className="font-display text-[0.55rem] tracking-[0.18em] text-book-gold/55 uppercase sm:text-[0.6rem]">
+        {label}
+      </span>
+      <span className="truncate font-body text-[0.7rem] text-book-paper/85 sm:text-xs">
+        {value}
+      </span>
+    </div>
+  );
+}
 
+function formatRating(rating: number): string {
+  return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
+}
+
+export default function GameCard({ game }: GameCardProps) {
   return (
     <article
-      className={`
-        relative flex overflow-hidden
-        bg-book-blue-light
-        border border-book-gold/45
-        shadow-[inset_0_0_0_1px_rgba(201,168,76,0.12)]
-        ${compact || stacked ? "min-h-0" : ""}
-      `}
+      className="
+        relative flex h-full min-h-0 w-full flex-col overflow-hidden
+        bg-book-blue
+      "
     >
       <CornerOrnament className="top-1.5 left-1.5 border-t border-l" />
       <CornerOrnament className="top-1.5 right-1.5 border-t border-r" />
@@ -47,107 +52,144 @@ export default function GameCard({
 
       {game.zerado ? (
         <div
-          className={`
-            pointer-events-none absolute z-20
-            rotate-45
+          className="
+            pointer-events-none absolute top-3 -right-7 z-20
+            w-28 rotate-45
             bg-gradient-to-b from-[#E8D08A] via-book-gold to-[#A8842E]
-            text-center
-            font-display font-semibold tracking-[0.15em] text-black uppercase
-            shadow-md
-            ${
-              stacked
-                ? "top-2.5 -right-8 w-32 py-0.5 text-[0.6rem]"
-                : compact
-                  ? "top-2 -right-9 w-28 py-0.5 text-[0.55rem]"
-                  : "top-3 -right-8 w-32 py-1 text-[0.65rem]"
-            }
-          `}
+            py-0.5 text-center
+            font-display text-[0.55rem] font-semibold tracking-[0.15em] text-black uppercase
+            shadow-md sm:top-3.5 sm:-right-8 sm:w-32 sm:text-[0.6rem]
+          "
         >
           Zerado
         </div>
       ) : null}
 
-      <div
-        className={`relative z-10 flex w-full ${
-          stacked
-            ? "gap-3 p-3 sm:gap-4 sm:p-4"
-            : compact
-              ? "gap-2.5 p-2.5"
-              : "gap-4 p-4 sm:gap-5 sm:p-5"
-        }`}
-      >
-        <div
-          className={`relative shrink-0 overflow-hidden rounded-md border border-book-gold/35 ${coverSize}`}
-        >
+      <div className="relative z-10 flex h-full min-h-0 flex-col gap-2.5 p-3 sm:gap-3 sm:p-4">
+        {/* Cabeçalho */}
+        <header className="shrink-0 text-center">
+          <div
+            aria-hidden
+            className="mx-auto mb-1.5 h-px w-12 bg-gradient-to-r from-transparent via-book-gold/50 to-transparent sm:mb-2 sm:w-16"
+          />
+          <h2 className="font-display text-base leading-snug tracking-wide text-book-gold sm:text-lg md:text-xl">
+            {game.title}
+          </h2>
+          <div
+            aria-hidden
+            className="mx-auto mt-1.5 h-px w-12 bg-gradient-to-r from-transparent via-book-gold/50 to-transparent sm:mt-2 sm:w-16"
+          />
+        </header>
+
+        {/* Capa em moldura dourada */}
+        <div className="relative mx-auto aspect-[3/2] w-full max-h-[28%] shrink-0 overflow-hidden border border-book-gold/55 shadow-[inset_0_0_0_1px_rgba(201,168,76,0.2)] sm:max-h-[30%]">
           <Image
             src={game.coverUrl}
             alt={`Capa de ${game.title}`}
             fill
-            sizes={stacked ? "112px" : compact ? "80px" : "128px"}
+            sizes="(max-width: 640px) 90vw, 420px"
             className="object-cover"
+            priority={false}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-1 border border-book-gold/25"
           />
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col pr-2 sm:pr-3">
-          <h2
-            className={`font-display leading-snug tracking-wide text-book-gold ${
-              stacked
-                ? "line-clamp-2 text-base sm:text-lg"
-                : compact
-                  ? "line-clamp-2 text-sm sm:text-base"
-                  : "text-lg sm:text-xl"
-            }`}
-          >
-            {game.title}
-          </h2>
+        {/* Ficha técnica */}
+        <section
+          aria-label="Ficha técnica"
+          className="
+            shrink-0 border border-book-gold/30
+            bg-book-blue-light/40
+          "
+        >
+          <div className="grid grid-cols-2 divide-x divide-y divide-book-gold/30 sm:grid-cols-3">
+            <SpecCell label="Data de Início" value={game.startedAt} />
+            <SpecCell label="Horário Início" value={game.startTime} />
+            <SpecCell
+              label="Data Final"
+              value={game.completedAt ?? "Em andamento"}
+            />
+            <SpecCell
+              label="Horário Final"
+              value={game.endTime ?? "—"}
+            />
+            <SpecCell label="Plataforma" value={game.platform} />
+            <SpecCell label="Horas" value={`${game.playtimeHours}h`} />
+          </div>
+        </section>
 
-          <ul
-            className={`font-body text-book-paper/75 ${
-              stacked
-                ? "mt-2 space-y-1 text-xs sm:text-sm"
-                : compact
-                  ? "mt-1.5 space-y-0.5 text-[0.7rem]"
-                  : "mt-3 space-y-1.5 text-sm"
-            }`}
+        {/* Extra + Nota */}
+        <div className="flex shrink-0 items-stretch gap-2.5 sm:gap-3">
+          <section
+            aria-label="Informações extras"
+            className="
+              flex min-w-0 flex-1 flex-col justify-center gap-1
+              border border-book-gold/30 px-2.5 py-2
+              sm:gap-1.5 sm:px-3 sm:py-2.5
+            "
           >
-            <li className="flex items-center gap-1.5">
-              <CalendarIcon className="h-3 w-3 shrink-0 text-book-gold/70" />
-              <span className="truncate">Início: {game.startedAt}</span>
-            </li>
-            <li className="flex items-center gap-1.5">
-              <ClockIcon className="h-3 w-3 shrink-0 text-book-gold/70" />
-              <span>{game.playtimeHours}h jogadas</span>
-            </li>
-            {(stacked || !compact) &&
-              (game.completedAt ? (
-                <li className="flex items-center gap-1.5 text-book-paper/60">
-                  <CalendarIcon className="h-3 w-3 shrink-0 text-book-gold/50" />
-                  <span>Conclusão: {game.completedAt}</span>
-                </li>
-              ) : (
-                <li className="text-book-gold/45 italic">Em andamento</li>
-              ))}
-          </ul>
+            <p className="flex items-baseline gap-2 font-body text-[0.7rem] text-book-paper/80 sm:text-xs">
+              <span className="shrink-0 font-display text-[0.55rem] tracking-[0.14em] text-book-gold/55 uppercase">
+                Ano
+              </span>
+              <span className="truncate">{game.year}</span>
+            </p>
+            <p className="flex items-baseline gap-2 font-body text-[0.7rem] text-book-paper/80 sm:text-xs">
+              <span className="shrink-0 font-display text-[0.55rem] tracking-[0.14em] text-book-gold/55 uppercase">
+                Devs
+              </span>
+              <span className="truncate">{game.developer}</span>
+            </p>
+            <p className="flex items-baseline gap-2 font-body text-[0.7rem] text-book-paper/80 sm:text-xs">
+              <span className="shrink-0 font-display text-[0.55rem] tracking-[0.14em] text-book-gold/55 uppercase">
+                Género
+              </span>
+              <span className="truncate">{game.genre}</span>
+            </p>
+          </section>
 
           <div
-            className={`mt-auto flex justify-end ${
-              stacked ? "pt-2" : compact ? "pt-1" : "pt-3"
-            }`}
+            className="
+              flex aspect-square w-[4.25rem] shrink-0 flex-col items-center justify-center
+              rounded-full border-2 border-book-gold
+              bg-gradient-to-b from-book-blue-light to-book-blue
+              shadow-[inset_0_0_12px_rgba(201,168,76,0.12)]
+              sm:w-[4.75rem]
+            "
+            aria-label={`Nota ${formatRating(game.rating)} de 10`}
           >
-            <button
-              type="button"
-              className="
-                inline-flex min-h-11 items-center
-                font-body text-[0.65rem] tracking-wide text-book-gold/55
-                underline decoration-book-gold/30 underline-offset-4
-                transition hover:text-book-gold hover:decoration-book-gold/70
-                sm:min-h-0 sm:text-xs
-              "
-            >
-              Detalhes
-            </button>
+            <span className="font-display text-[0.5rem] tracking-[0.2em] text-book-gold/60 uppercase">
+              Nota
+            </span>
+            <span className="font-display text-lg leading-none text-book-gold sm:text-xl">
+              {formatRating(game.rating)}
+            </span>
+            <span className="mt-0.5 font-body text-[0.55rem] text-book-gold/50">
+              / 10
+            </span>
           </div>
         </div>
+
+        {/* Narrativa / comentários */}
+        <section
+          aria-label="Comentários"
+          className="
+            flex min-h-0 flex-1 flex-col
+            border border-book-gold/25
+            bg-book-blue-light/25
+            px-2.5 py-2 sm:px-3 sm:py-2.5
+          "
+        >
+          <span className="mb-1 shrink-0 font-display text-[0.55rem] tracking-[0.18em] text-book-gold/50 uppercase">
+            Narrativa
+          </span>
+          <p className="min-h-0 overflow-hidden font-body text-[0.7rem] leading-relaxed text-book-paper/75 italic sm:text-xs sm:leading-relaxed">
+            {game.description}
+          </p>
+        </section>
       </div>
     </article>
   );

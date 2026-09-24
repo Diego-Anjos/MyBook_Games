@@ -1,4 +1,4 @@
-import AuthBook from "@/components/AuthBook";
+import AuthBookEntry from "@/components/AuthBookEntry";
 import Library from "@/components/library/Library";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,7 +9,7 @@ export default async function Home() {
 
   // Fase front-end: sem Supabase, a capa de login mockada abre a Library.
   if (!configured) {
-    return <AuthBook />;
+    return <AuthBookEntry />;
   }
 
   const supabase = await createClient();
@@ -18,7 +18,7 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return <AuthBook />;
+    return <AuthBookEntry />;
   }
 
   const displayName =

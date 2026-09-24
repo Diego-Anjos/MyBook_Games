@@ -19,9 +19,6 @@ import {
 import { useViewport } from "@/hooks/useViewport";
 import type { Game } from "@/data/mock-games";
 
-const CARDS_PER_PAGE_MOBILE = 2;
-const CARDS_PER_PAGE_DESKTOP = 4;
-
 type FlipBookHandle = {
   pageFlip: () => {
     flipNext: () => void;
@@ -35,19 +32,15 @@ type HTMLBookProps = {
   games: Game[];
 };
 
-function chunkGames(
-  games: Game[],
-  size: number,
-  /** Em landscape o espalhar precisa de número par de páginas. */
-  padToEven: boolean,
-): Game[][] {
+/**
+ * Uma página por jogo. Em landscape (spread), precisa de número par
+ * de páginas para o lado esquerdo/direito alinharem.
+ */
+function buildPages(games: Game[], padToEven: boolean): (Game | null)[] {
   if (games.length === 0) return [];
-  const pages: Game[][] = [];
-  for (let i = 0; i < games.length; i += size) {
-    pages.push(games.slice(i, i + size));
-  }
+  const pages: (Game | null)[] = [...games];
   if (padToEven && pages.length % 2 !== 0) {
-    pages.push([]);
+    pages.push(null);
   }
   return pages;
 }
@@ -56,11 +49,10 @@ type FlipPageProps = {
   children: ReactNode;
   number: number;
   total: number;
-  columns: 1 | 2;
 };
 
 const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
-  function FlipPage({ children, number, total, columns }, ref) {
+  function FlipPage({ children, number, total }, ref) {
     return (
       <div
         ref={ref}
@@ -69,18 +61,11 @@ const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
           box-border h-full overflow-hidden
           bg-book-blue
           border-x border-book-gold/20
-          px-2.5 py-3 sm:px-4 sm:py-5
         "
       >
         <div className="flex h-full flex-col">
-          <div
-            className={`grid flex-1 content-start gap-2.5 sm:gap-4 ${
-              columns === 2 ? "grid-cols-2" : "grid-cols-1"
-            }`}
-          >
-            {children}
-          </div>
-          <p className="mt-2 text-center font-display text-[0.65rem] tracking-[0.25em] text-book-gold/45 sm:mt-3">
+          <div className="min-h-0 flex-1">{children}</div>
+          <p className="shrink-0 py-1.5 text-center font-display text-[0.6rem] tracking-[0.25em] text-book-gold/45 sm:py-2 sm:text-[0.65rem]">
             {number} / {total}
           </p>
         </div>
@@ -95,15 +80,12 @@ export default function HTMLBook({ games }: HTMLBookProps) {
   const [pageCount, setPageCount] = useState(0);
   const { isMobile, ready } = useViewport();
 
-  const cardsPerPage = isMobile
-    ? CARDS_PER_PAGE_MOBILE
-    : CARDS_PER_PAGE_DESKTOP;
   // Portrait (1 página): não precisa de par; landscape (2): sim
   const usePortrait = isMobile;
 
   const pages = useMemo(
-    () => chunkGames(games, cardsPerPage, !usePortrait),
-    [games, cardsPerPage, usePortrait],
+    () => buildPages(games, !usePortrait),
+    [games, usePortrait],
   );
 
   const syncPageState = useCallback(() => {
@@ -165,7 +147,6 @@ export default function HTMLBook({ games }: HTMLBookProps) {
 
   const bookKey = [
     usePortrait ? "portrait" : "landscape",
-    cardsPerPage,
     pages.length,
     games.map((g) => g.id).join("-"),
   ].join("|");
@@ -187,12 +168,12 @@ export default function HTMLBook({ games }: HTMLBookProps) {
           className="library-html-book mx-auto"
           style={{}}
           width={usePortrait ? 340 : 480}
-          height={usePortrait ? 520 : 640}
+          height={usePortrait ? 560 : 680}
           size="stretch"
           minWidth={usePortrait ? 260 : 320}
           maxWidth={usePortrait ? 420 : 520}
-          minHeight={usePortrait ? 400 : 440}
-          maxHeight={usePortrait ? 640 : 720}
+          minHeight={usePortrait ? 440 : 480}
+          maxHeight={usePortrait ? 680 : 760}
           drawShadow={true}
           maxShadowOpacity={0.55}
           showCover={false}
@@ -210,26 +191,19 @@ export default function HTMLBook({ games }: HTMLBookProps) {
           onFlip={handleFlip}
           onInit={handleInit}
         >
-          {pages.map((pageGames, index) => (
+          {pages.map((game, index) => (
             <FlipPage
-              key={`page-${index}`}
+              key={game ? `page-${game.id}` : `blank-${index}`}
               number={index + 1}
               total={pages.length}
-              columns={usePortrait ? 1 : 2}
             >
-              {pageGames.map((game) => (
-                <GameCard
-                  key={game.id}
-                  game={game}
-                  compact
-                  layout={usePortrait ? "stack" : "grid"}
-                />
-              ))}
-              {pageGames.length === 0 ? (
-                <p className="col-span-full self-center text-center font-body text-sm text-book-gold/40 italic">
+              {game ? (
+                <GameCard game={game} />
+              ) : (
+                <p className="flex h-full items-center justify-center font-body text-sm text-book-gold/40 italic">
                   Página em branco
                 </p>
-              ) : null}
+              )}
             </FlipPage>
           ))}
         </FlipBook>
