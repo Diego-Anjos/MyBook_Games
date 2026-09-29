@@ -9,6 +9,7 @@ import {
   FeatherIcon,
 } from "@/components/icons";
 import UserProfileModal from "@/components/library/UserProfileModal";
+import { supabase } from "@/lib/supabase";
 
 type LibraryHeaderProps = {
   years: readonly number[];
@@ -139,7 +140,7 @@ export default function LibraryHeader({
   selectedYear,
   onYearChange,
   onAddGame,
-  nickname = "Leitor",
+  nickname = "Escritor",
   avatarUrl = null,
 }: LibraryHeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -184,7 +185,7 @@ export default function LibraryHeader({
                   rounded-sm py-1 pr-2 transition
                   hover:opacity-95
                 "
-                aria-label="Abrir ficha do leitor"
+                aria-label="Abrir ficha do escritor"
               >
                 <span
                   className="
@@ -316,7 +317,11 @@ export default function LibraryHeader({
       <LogoutModal
         open={isLogoutModalOpen}
         onCancel={() => setIsLogoutModalOpen(false)}
-        onConfirm={() => window.location.reload()}
+        onConfirm={() => {
+          void supabase.auth.signOut().finally(() => {
+            window.location.assign("/");
+          });
+        }}
       />
     </>
   );

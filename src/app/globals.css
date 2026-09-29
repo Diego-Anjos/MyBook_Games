@@ -217,6 +217,42 @@ h6 {
 .react-datepicker__day--outside-month {
   color: rgba(244, 238, 220, 0.35) !important;
 }
+.react-datepicker__day--disabled,
+.react-datepicker__day--disabled:hover {
+  color: rgba(244, 238, 220, 0.28) !important;
+  background-color: transparent !important;
+  cursor: default;
+}
+.react-datepicker__year-dropdown,
+.react-datepicker__month-dropdown,
+.react-datepicker__month-year-dropdown {
+  background-color: var(--color-book-blue, #0B1426) !important;
+  border: 1px solid rgba(201, 168, 76, 0.35) !important;
+}
+.react-datepicker__year-dropdown--scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 168, 76, 0.55) transparent;
+}
+.react-datepicker__year-option,
+.react-datepicker__month-option,
+.react-datepicker__month-year-option {
+  color: #F4EEDC !important;
+}
+.react-datepicker__year-option:hover,
+.react-datepicker__month-option:hover,
+.react-datepicker__month-year-option:hover {
+  background-color: rgba(201, 168, 76, 0.2) !important;
+  color: #C9A84C !important;
+}
+.react-datepicker__year-option--selected_year,
+.react-datepicker__month-option--selected,
+.react-datepicker__month-year-option--selected {
+  background-color: #C9A84C !important;
+  color: #0B1426 !important;
+}
+.react-datepicker__navigation--years {
+  border-color: #C9A84C !important;
+}
 .react-datepicker__triangle {
   fill: var(--color-book-blue, #0B1426) !important;
   color: var(--color-book-blue, #0B1426) !important;

@@ -95,7 +95,7 @@ export default function UserProfileModal({
   open,
   onClose,
   initialName = "",
-  initialNickname = "Leitor",
+  initialNickname = "Escritor",
   initialEmail = "",
 }: UserProfileModalProps) {
   const titleId = useId();
@@ -245,7 +245,7 @@ export default function UserProfileModal({
               id={titleId}
               className="mt-2 font-display text-3xl text-book-blue"
             >
-              Ficha do Leitor
+              Ficha do Escritor
             </h2>
             <div
               aria-hidden
@@ -267,7 +267,7 @@ export default function UserProfileModal({
                 // eslint-disable-next-line @next/next/no-img-element -- blob: URL local
                 <img
                   src={avatarUrl}
-                  alt="Retrato do leitor"
+                  alt="Retrato do escritor"
                   className="h-full w-full object-cover"
                 />
               ) : (

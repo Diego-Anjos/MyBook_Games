@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
           title: body.title.trim(),
           cover_url: body.coverUrl ?? null,
           release_date: body.releaseDate ?? null,
-          companies: body.companies ?? [],
+          genres: body.companies ?? [],
         },
         { onConflict: "user_id,igdb_id" },
       )

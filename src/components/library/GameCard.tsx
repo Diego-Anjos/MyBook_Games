@@ -73,7 +73,7 @@ export default function GameCard({ game, onEdit }: GameCardProps) {
         title="Editar página"
         aria-label="Editar página"
         className={`absolute z-20 rounded-full p-2 text-book-gold/40 transition-all duration-300 hover:bg-book-gold/10 hover:text-book-gold ${
-          game.zerado ? "top-6 right-20" : "top-4 right-4"
+          game.zerado ? "top-1 right-20" : "top-1 right-4"
         }`}
       >
         <Pen className="h-4 w-4" />
@@ -102,7 +102,7 @@ export default function GameCard({ game, onEdit }: GameCardProps) {
               {game.developer}
             </p>
             <p className="synopsis-scroll mt-1 max-h-10 overflow-y-auto pr-6 text-xs font-body leading-snug text-book-paper/80 md:mt-2 md:max-h-[4.5rem] md:text-sm md:leading-relaxed">
-              {game.synopsis.trim() || "Sinopse indisponível."}
+              {game.synopsis?.trim() || "Sinopse indisponível."}
             </p>
           </div>
         </div>

@@ -1,5 +1,7 @@
 export type Game = {
   id: string;
+  /** Identificador do jogo no IGDB. */
+  igdbId: number;
   title: string;
   coverUrl: string;
   startedAt: string;

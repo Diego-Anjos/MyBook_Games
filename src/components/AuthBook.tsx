@@ -1,25 +1,44 @@
 "use client";
 
 import {
+  Children,
   FormEvent,
+  MouseEvent,
+  cloneElement,
   forwardRef,
+  isValidElement,
+  useCallback,
   useEffect,
+  useImperativeHandle,
+  useMemo,
   useRef,
   useState,
-  type ComponentType,
+  type ReactElement,
   type ReactNode,
+  type Ref,
+  type CSSProperties,
 } from "react";
+import { createPortal } from "react-dom";
+import type { User as AuthUser } from "@supabase/supabase-js";
 import Image from "next/image";
-import HTMLFlipBook from "react-pageflip";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { ptBR } from "date-fns/locale";
+import { PageFlip } from "page-flip";
 import {
   AtSign,
   Calendar,
+  Check,
+  Feather,
   Gamepad2,
   KeyRound,
   Mail,
   User,
 } from "lucide-react";
 import Library from "@/components/library/Library";
+import { PlatformIcon } from "@/components/library/PlatformIcon";
+import { ensureProfile, loadReaderName } from "@/lib/profile";
+import { supabase } from "@/lib/supabase";
 
 type Platform = "pc" | "playstation" | "xbox";
 
@@ -31,6 +50,27 @@ const PLATFORMS: { id: Platform; label: string }[] = [
 
 const BOOK_WIDTH = 450;
 const BOOK_HEIGHT = 720;
+const FLIP_BOOK_STYLE = {};
+
+const FLIP_SETTINGS = {
+  width: BOOK_WIDTH,
+  height: BOOK_HEIGHT,
+  size: "fixed" as const,
+  showCover: false,
+  drawShadow: true,
+  maxShadowOpacity: 0.5,
+  usePortrait: true,
+  useMouseEvents: false,
+  swipeDistance: 0,
+  showPageCorners: false,
+  disableFlipByClick: true,
+  clickEventForward: true,
+  mobileScrollSupport: true,
+  flippingTime: 1000,
+  startPage: 0,
+  autoSize: false,
+  startZIndex: 0,
+};
 
 type FlipBookHandle = {
   pageFlip: () => {
@@ -40,6 +80,66 @@ type FlipBookHandle = {
     turnToPage: (page: number) => void;
   } | null;
 };
+
+/**
+ * O react-pageflip chama updateFromHtml a cada mudança de filho e destrói
+ * os inputs. Este livro monta o PageFlip uma vez e deixa o React atualizar
+ * o conteúdo das folhas no mesmo DOM.
+ */
+const StableFlipBook = forwardRef<
+  FlipBookHandle,
+  {
+    className?: string;
+    style?: CSSProperties;
+    children?: ReactNode;
+  } & typeof FLIP_SETTINGS
+>(function StableFlipBook({ className, style, children, ...settings }, ref) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const flipRef = useRef<PageFlip | null>(null);
+  const pagesRef = useRef<HTMLDivElement[]>([]);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  useImperativeHandle(ref, () => ({
+    pageFlip: () => flipRef.current,
+  }));
+
+  const pages = Children.map(children, (child, index) => {
+    if (!isValidElement(child)) return child;
+    return cloneElement(child as ReactElement<{ ref?: Ref<HTMLDivElement> }>, {
+      ref: (node: HTMLDivElement | null) => {
+        if (node) pagesRef.current[index] = node;
+      },
+    });
+  });
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const nodes = pagesRef.current.filter(Boolean);
+    if (nodes.length === 0) return;
+
+    const flip = new PageFlip(root, settingsRef.current);
+    flip.loadFromHTML(nodes);
+    flipRef.current = flip;
+
+    return () => {
+      flip.clear();
+      root.querySelectorAll(":scope > .stf__wrapper").forEach((node) => node.remove());
+      root.classList.remove("stf__parent");
+      root.style.minWidth = "";
+      root.style.minHeight = "";
+      root.style.display = "";
+      flipRef.current = null;
+    };
+  }, []);
+
+  return (
+    <div ref={rootRef} className={className} style={style}>
+      {pages}
+    </div>
+  );
+});
 
 /** Índice da página final de transição (Page 2). */
 const TRANSITION_PAGE_INDEX = 2;
@@ -139,6 +239,27 @@ const Page = forwardRef<HTMLDivElement, PageProps>(function Page(
   );
 });
 
+/** A folha do livro recorta o popup; o calendário abre no documento. */
+function CalendarPopper({ children }: { children?: ReactNode }) {
+  if (typeof document === "undefined") return <>{children}</>;
+  return createPortal(children, document.body);
+}
+
+function formatBirthDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const birthDateFieldClassName = `
+  w-full min-h-11 bg-transparent py-2.5 pr-10 font-body
+  text-base text-book-paper placeholder:text-book-gold/45
+  outline-none border-0 border-b border-book-gold/50
+  focus:border-book-gold transition-colors
+  [color-scheme:dark]
+`;
+
 function IconField({
   id,
   label,
@@ -219,7 +340,7 @@ function PlatformPicker({
               aria-checked={selected}
               onClick={() => onChange(platform.id)}
               className={`
-                flex min-h-10 items-center justify-center rounded-sm px-1
+                flex min-h-10 items-center justify-center gap-2 rounded-sm px-1
                 font-display text-[0.65rem] tracking-[0.08em] uppercase sm:text-xs
                 border transition duration-200
                 ${
@@ -229,6 +350,7 @@ function PlatformPicker({
                 }
               `}
             >
+              <PlatformIcon className="w-4 h-4" platform={platform.label} />
               {platform.label}
             </button>
           );
@@ -249,7 +371,7 @@ function FaceHeader({
     <header
       className={`
         flex flex-col items-center text-center
-        ${compact ? "mb-4 sm:mb-6" : "mb-6 sm:mb-10"}
+        ${compact ? "mb-2 sm:mb-3" : "mb-6 sm:mb-10"}
       `}
     >
       <div
@@ -307,6 +429,40 @@ const textLinkClassName = `
   transition hover:text-book-gold hover:underline
 `;
 
+function authErrorMessage(message: string): string {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("invalid login") ||
+    lower.includes("invalid credentials") ||
+    lower.includes("invalid email or password")
+  ) {
+    return "E-mail ou senha não conferem com a ficha.";
+  }
+  if (lower.includes("already registered") || lower.includes("already been registered")) {
+    return "Este e-mail já possui uma ficha de escritor.";
+  }
+  if (lower.includes("password")) {
+    return "A senha precisa ter pelo menos 6 caracteres.";
+  }
+  if (lower.includes("email")) {
+    return "Informe um e-mail válido para a ficha.";
+  }
+  return "Não foi possível concluir o pedido. Tente novamente.";
+}
+
+function AuthNotice({ message }: { message: string | null }) {
+  if (!message) return null;
+
+  return (
+    <p
+      role="alert"
+      className="rounded-sm bg-book-paper px-3 py-2 text-center font-body text-sm leading-snug text-red-900/80"
+    >
+      {message}
+    </p>
+  );
+}
+
 function BookLoadingPlaceholder() {
   return (
     <div
@@ -344,8 +500,8 @@ function TransitionFace() {
 
 function TermsFooter({ onOpen }: { onOpen: () => void }) {
   return (
-    <p className="mt-8 text-center font-body text-xs text-book-gold/50">
-      Ao prosseguir, você concorda com o nosso{" "}
+    <p className="mt-3 mb-6 text-center font-body text-xs text-book-gold/50">
+      Ao prosseguir, você concorda com as{" "}
       <button
         type="button"
         onClick={(e) => {
@@ -355,7 +511,7 @@ function TermsFooter({ onOpen }: { onOpen: () => void }) {
         }}
         className="underline underline-offset-2 transition-colors hover:text-book-gold"
       >
-        Pacto de Leitura (Termos de Uso)
+        Regras do Livro (Termos de Uso)
       </button>
       .
     </p>
@@ -380,7 +536,7 @@ function TermsModal({
     >
       <button
         type="button"
-        aria-label="Fechar pacto de leitura"
+        aria-label="Fechar pacto de escrita"
         className="absolute inset-0"
         onClick={onClose}
       />
@@ -410,7 +566,7 @@ function TermsModal({
             id="terms-modal-title"
             className="mb-6 text-center font-display text-3xl text-book-blue"
           >
-            O Pacto de Leitura
+            As Regras do Livro
           </h2>
 
           <div className="space-y-4 font-body leading-relaxed text-book-blue/80">
@@ -449,7 +605,7 @@ function TermsModal({
               <p>
                 Seus dados de acesso — em especial o e-mail — são guardados com
                 segurança, sob o nosso selo. Não os compartilhamos com terceiros
-                nem os usamos fora do propósito de manter a sua ficha de leitor.
+                nem os usamos fora do propósito de manter a sua ficha de escritor.
               </p>
             </section>
           </div>
@@ -477,23 +633,148 @@ function TermsModal({
 
 export default function AuthBook() {
   const bookRef = useRef<FlipBookHandle>(null);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [clientReady, setClientReady] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [nickName, setNickName] = useState("");
-  const [birthDate, setBirthDate] = useState("");
+  const [birthDate, setBirthDate] = useState<Date | null>(null);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [platform, setPlatform] = useState<Platform>("pc");
   const [loginLoading, setLoginLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [entered, setEntered] = useState(false);
-  const [userName, setUserName] = useState("Leitor");
+  const [userName, setUserName] = useState("Escritor");
   const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authErrorPage, setAuthErrorPage] = useState<"login" | "register" | null>(
+    null,
+  );
+  const draftRef = useRef({
+    email: "",
+    password: "",
+    name: "",
+    nickName: "",
+    birthDate: null as Date | null,
+    confirmPassword: "",
+    platform: "pc" as Platform,
+    acceptedTerms: false,
+    loginLoading: false,
+    registerLoading: false,
+    isTransitioning: false,
+  });
+  draftRef.current = {
+    email,
+    password,
+    name,
+    nickName,
+    birthDate,
+    confirmPassword,
+    platform,
+    acceptedTerms,
+    loginLoading,
+    registerLoading,
+    isTransitioning,
+  };
+
+  const openRegisterPage = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAuthError(null);
+    setAuthErrorPage(null);
+    setAcceptedTerms(false);
+    bookRef.current?.pageFlip?.()?.flip(1);
+  }, []);
+
+  const openLoginPage = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAuthError(null);
+    setAuthErrorPage(null);
+    setAcceptedTerms(false);
+    bookRef.current?.pageFlip?.()?.turnToPage(0);
+  }, []);
+
+  function showAuthError(page: "login" | "register", message: string) {
+    setAuthErrorPage(page);
+    setAuthError(message);
+  }
+
+  function clearAuthError() {
+    setAuthError(null);
+    setAuthErrorPage(null);
+  }
 
   useEffect(() => {
-    setClientReady(true);
+    let active = true;
+
+    const revealBook = () => {
+      if (active) setClientReady(true);
+    };
+
+    const openFromUser = (user: AuthUser) => {
+      const nickname =
+        typeof user.user_metadata?.nickname === "string"
+          ? user.user_metadata.nickname.trim()
+          : "";
+      const fullName =
+        typeof user.user_metadata?.full_name === "string"
+          ? user.user_metadata.full_name.trim()
+          : "";
+      setUserName(
+        nickname || fullName || user.email?.split("@")[0] || "Escritor",
+      );
+      setEntered(true);
+
+      window.setTimeout(() => {
+        if (!active) return;
+        void ensureProfile(user)
+          .then(() => loadReaderName(user))
+          .then((name) => {
+            if (active) setUserName(name);
+          })
+          .catch((error: unknown) => {
+            console.error("Erro ao verificar sessão:", error);
+          });
+      }, 0);
+    };
+
+    const checkSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) console.error("Erro ao verificar sessão:", error);
+        if (!active) return;
+        if (data.session?.user) openFromUser(data.session.user);
+      } catch (error) {
+        console.error("Erro ao verificar sessão:", error);
+      } finally {
+        revealBook();
+      }
+    };
+
+    void checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      revealBook();
+      if (event === "INITIAL_SESSION" && session?.user) {
+        openFromUser(session.user);
+      }
+      if (event === "SIGNED_OUT") setEntered(false);
+    });
+
+    const safety = window.setTimeout(revealBook, 3000);
+
+    return () => {
+      active = false;
+      window.clearTimeout(safety);
+      subscription.unsubscribe();
+    };
   }, []);
 
   function enterLibrary(displayName: string) {
@@ -539,28 +820,375 @@ export default function AuthBook() {
     });
   }
 
-  function handleLogin(e: FormEvent<HTMLFormElement>) {
+  async function handleLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (loginLoading || isTransitioning) return;
+    const draft = draftRef.current;
+    if (draft.loginLoading || draft.isTransitioning) return;
 
+    clearAuthError();
     setLoginLoading(true);
 
-    const emailValue = email.trim();
-    const nextUserName = emailValue.split("@")[0] || "Leitor";
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: draft.email.trim(),
+      password: draft.password,
+    });
 
-    openLibraryWithPageFlip(nextUserName, "login");
+    if (error || !data.user) {
+      setLoginLoading(false);
+      showAuthError("login", authErrorMessage(error?.message ?? ""));
+      return;
+    }
+
+    const profileResult = await ensureProfile(data.user);
+    if (profileResult.error) {
+      setLoginLoading(false);
+      showAuthError("login", authErrorMessage(profileResult.error));
+      return;
+    }
+
+    const displayName = await loadReaderName(data.user);
+    openLibraryWithPageFlip(displayName, "login");
   }
 
-  function handleRegister(e: FormEvent<HTMLFormElement>) {
+  async function handleRegister(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (loginLoading || registerLoading || isTransitioning) return;
+    const draft = draftRef.current;
+    if (draft.loginLoading || draft.registerLoading || draft.isTransitioning) return;
 
-    const capturedName =
-      name.trim() || nickName.trim() || email.trim().split("@")[0] || "Leitor";
+    if (!draft.acceptedTerms) return;
 
+    if (draft.password !== draft.confirmPassword) {
+      showAuthError("register", "As senhas não coincidem.");
+      return;
+    }
+
+    clearAuthError();
     setRegisterLoading(true);
-    openLibraryWithPageFlip(capturedName, "register");
+
+    const trimmedName = draft.name.trim();
+    const trimmedNick = draft.nickName.trim();
+    const trimmedEmail = draft.email.trim();
+    const birthDateValue = draft.birthDate ? formatBirthDate(draft.birthDate) : "";
+
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
+      options: {
+        data: {
+          full_name: trimmedName,
+          nickname: trimmedNick,
+          birth_date: birthDateValue,
+          platform: draft.platform,
+        },
+      },
+    });
+
+    if (error || !data.user) {
+      setRegisterLoading(false);
+      showAuthError("register", authErrorMessage(error?.message ?? ""));
+      return;
+    }
+
+    if (data.user.identities && data.user.identities.length === 0) {
+      setRegisterLoading(false);
+      showAuthError("register", "Este e-mail já possui uma ficha de escritor.");
+      return;
+    }
+
+    const profileResult = await ensureProfile(data.user, {
+      name: trimmedName,
+      nickname: trimmedNick,
+      birthDate: birthDateValue,
+      platform: draft.platform,
+    });
+
+    if (profileResult.error) {
+      setRegisterLoading(false);
+      showAuthError(
+        "register",
+        "A conta foi criada, mas a ficha não pôde ser guardada. Tente entrar novamente.",
+      );
+      return;
+    }
+
+    setRegisterLoading(false);
+    setShowWelcomeModal(true);
   }
+
+  const handleLoginRef = useRef(handleLogin);
+  const handleRegisterRef = useRef(handleRegister);
+  handleLoginRef.current = handleLogin;
+  handleRegisterRef.current = handleRegister;
+
+  const submitLogin = useCallback((event: FormEvent<HTMLFormElement>) => {
+    void handleLoginRef.current(event);
+  }, []);
+
+  const submitRegister = useCallback((event: FormEvent<HTMLFormElement>) => {
+    void handleRegisterRef.current(event);
+  }, []);
+
+  // As folhas ficam no mesmo DOM; o PageFlip não é recriado a cada tecla.
+  const bookPages = useMemo(
+    () => [
+      // Page 0 — Login
+      <Page key="login">
+                <div className="flex h-full flex-col px-6 py-8 sm:px-10 sm:py-12">
+                  <FaceHeader title="Acessar Biblioteca" />
+
+                  <form
+                    onSubmit={submitLogin}
+                    className="mx-auto flex w-full max-w-xs flex-1 flex-col justify-center gap-5 sm:gap-8"
+                  >
+                    <IconField
+                      id="login-email"
+                      label="E-mail"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={setEmail}
+                      placeholder="E-mail"
+                      icon={<User className="h-4 w-4" strokeWidth={1.75} />}
+                    />
+                    <IconField
+                      id="login-password"
+                      label="Senha"
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={setPassword}
+                      placeholder="Senha"
+                      icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
+                    />
+
+                    <AuthNotice message={authErrorPage === "login" ? authError : null} />
+
+                    <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-4">
+                      <button
+                        type="submit"
+                        disabled={loginLoading || isTransitioning}
+                        className={ctaButtonClassName}
+                      >
+                        {loginLoading ? "Abrindo biblioteca…" : "Entrar"}
+                      </button>
+
+                      <a
+                        href="#esqueceu-senha"
+                        className={textLinkClassName}
+                        onClick={(e) => e.preventDefault()}
+                      >
+                        Esqueceu a senha?
+                      </a>
+
+                      <button
+                        type="button"
+                        disabled={isTransitioning}
+                        className="text-sm text-book-gold/80 hover:text-book-gold mt-6 tracking-wide underline-offset-4 hover:underline z-50 relative"
+                        onClick={openRegisterPage}
+                      >
+                        Novo escritor? Criar ficha de acesso
+                      </button>
+
+                      <TermsFooter onOpen={() => setIsTermsOpen(true)} />
+                    </div>
+                  </form>
+                </div>
+              </Page>,
+
+      // Page 1 — Cadastro (vira TransitionFace durante isTransitioning)
+      <Page key="register">
+                {isTransitioning ? (
+                  <TransitionFace />
+                ) : (
+                  <div className="flex h-full flex-col px-5 pt-4 pb-4 sm:px-9 sm:pt-5 sm:pb-5">
+                    <FaceHeader title="Nova Ficha de Escritor" compact />
+
+                    <form
+                      onSubmit={submitRegister}
+                      className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-start gap-2 overflow-y-auto hide-scrollbar"
+                    >
+                      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
+                        <IconField
+                          id="register-name"
+                          label="Nome"
+                          type="text"
+                          autoComplete="name"
+                          value={name}
+                          onChange={setName}
+                          placeholder="Nome"
+                          icon={<User className="h-4 w-4" strokeWidth={1.75} />}
+                        />
+                        <IconField
+                          id="register-nickname"
+                          label="NickName"
+                          type="text"
+                          autoComplete="username"
+                          value={nickName}
+                          onChange={setNickName}
+                          placeholder="NickName"
+                          icon={<AtSign className="h-4 w-4" strokeWidth={1.75} />}
+                        />
+                      </div>
+
+                      <label
+                        htmlFor="register-birthdate"
+                        className="group flex flex-col gap-1.5"
+                      >
+                        <span className="sr-only">Data de Nascimento</span>
+                        <div className="relative">
+                          <DatePicker
+                            id="register-birthdate"
+                            selected={birthDate}
+                            onChange={(date: Date | null) => setBirthDate(date)}
+                            dateFormat="dd/MM/yyyy"
+                            locale={ptBR}
+                            placeholderText="dd/mm/aaaa"
+                            showYearDropdown
+                            scrollableYearDropdown
+                            yearDropdownItemNumber={100}
+                            maxDate={new Date()}
+                            autoComplete="bday"
+                            required
+                            wrapperClassName="w-full"
+                            popperContainer={CalendarPopper}
+                            className={birthDateFieldClassName}
+                          />
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 text-book-gold/80"
+                          >
+                            <Calendar className="h-4 w-4" strokeWidth={1.75} />
+                          </span>
+                        </div>
+                      </label>
+
+                      <IconField
+                        id="register-email"
+                        label="E-mail"
+                        type="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={setEmail}
+                        placeholder="E-mail"
+                        icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
+                      />
+
+                      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
+                        <IconField
+                          id="register-password"
+                          label="Senha"
+                          type="password"
+                          autoComplete="new-password"
+                          value={password}
+                          onChange={setPassword}
+                          placeholder="Senha"
+                          icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
+                        />
+                        <IconField
+                          id="register-confirm-password"
+                          label="Confirmar Senha"
+                          type="password"
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={setConfirmPassword}
+                          placeholder="Confirmar Senha"
+                          icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
+                        />
+                      </div>
+
+                      <PlatformPicker value={platform} onChange={setPlatform} />
+
+                      <AuthNotice message={authErrorPage === "register" ? authError : null} />
+
+                      <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-3.5">
+                        <button
+                          type="submit"
+                          disabled={
+                            !acceptedTerms ||
+                            registerLoading ||
+                            loginLoading ||
+                            isTransitioning
+                          }
+                          className={`${ctaButtonClassName} ${
+                            !acceptedTerms
+                              ? "cursor-not-allowed opacity-50"
+                              : "hover:bg-book-gold/90"
+                          }`}
+                        >
+                          {registerLoading ? "Abrindo biblioteca…" : "Cadastrar"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isTransitioning}
+                          className="text-sm text-book-gold/80 hover:text-book-gold mt-1 tracking-wide underline-offset-4 hover:underline z-50 relative"
+                          onClick={openLoginPage}
+                        >
+                          Já possui uma ficha? Acessar
+                        </button>
+
+                        <label className="group mt-1 mb-2 flex cursor-pointer items-center justify-center gap-2">
+                          <div className="relative flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              checked={acceptedTerms}
+                              onChange={(e) => setAcceptedTerms(e.target.checked)}
+                              className="h-4 w-4 cursor-pointer appearance-none rounded-sm border border-book-gold/50 bg-transparent transition-colors checked:bg-book-gold"
+                            />
+                            {acceptedTerms && (
+                              <Check
+                                className="pointer-events-none absolute top-1/2 left-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 text-book-blue"
+                                strokeWidth={3}
+                              />
+                            )}
+                          </div>
+                          <span className="text-sm text-book-paper/70 transition-colors group-hover:text-book-paper/90">
+                            Eu li e concordo com as{" "}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setIsTermsOpen(true);
+                              }}
+                              className="text-book-gold underline underline-offset-2"
+                            >
+                              Regras do Livro
+                            </button>
+                            .
+                          </span>
+                        </label>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </Page>,
+
+      // Page 2 — Transição
+      <Page key="transition">
+                <TransitionFace />
+              </Page>
+    ],
+    [
+      acceptedTerms,
+      authError,
+      authErrorPage,
+      birthDate,
+      confirmPassword,
+      email,
+      isTransitioning,
+      loginLoading,
+      name,
+      nickName,
+      openLoginPage,
+      openRegisterPage,
+      password,
+      platform,
+      registerLoading,
+      submitLogin,
+      submitRegister,
+    ],
+  );
 
   if (entered) {
     return <Library userName={userName} />;
@@ -574,17 +1202,13 @@ export default function AuthBook() {
     );
   }
 
-  const FlipBook = HTMLFlipBook as unknown as ComponentType<
-    Record<string, unknown> & { children?: ReactNode }
-  >;
-
   return (
     <>
     <div className="mx-auto flex w-full justify-center px-3 sm:px-4">
-      <FlipBook
+      <StableFlipBook
         ref={bookRef}
         className="auth-html-book mx-auto"
-        style={{}}
+        style={FLIP_BOOK_STYLE}
         width={BOOK_WIDTH}
         height={BOOK_HEIGHT}
         size="fixed"
@@ -603,197 +1227,48 @@ export default function AuthBook() {
         autoSize={false}
         startZIndex={0}
       >
-        {/* Page 0 — Login */}
-        <Page>
-          <div className="flex h-full flex-col px-6 py-8 sm:px-10 sm:py-12">
-            <FaceHeader title="Acessar Biblioteca" />
-
-            <form
-              onSubmit={handleLogin}
-              className="mx-auto flex w-full max-w-xs flex-1 flex-col justify-center gap-5 sm:gap-8"
-            >
-              <IconField
-                id="login-email"
-                label="E-mail"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={setEmail}
-                placeholder="E-mail"
-                required={false}
-                icon={<User className="h-4 w-4" strokeWidth={1.75} />}
-              />
-              <IconField
-                id="login-password"
-                label="Senha"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={setPassword}
-                placeholder="Senha"
-                required={false}
-                icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
-              />
-
-              <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-4">
-                <button
-                  type="submit"
-                  disabled={loginLoading || isTransitioning}
-                  className={ctaButtonClassName}
-                >
-                  {loginLoading ? "Abrindo biblioteca…" : "Entrar"}
-                </button>
-
-                <a
-                  href="#esqueceu-senha"
-                  className={textLinkClassName}
-                  onClick={(e) => e.preventDefault()}
-                >
-                  Esqueceu a senha?
-                </a>
-
-                <button
-                  type="button"
-                  disabled={isTransitioning}
-                  className="text-sm text-book-gold/80 hover:text-book-gold mt-6 tracking-wide underline-offset-4 hover:underline z-50 relative"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (bookRef.current && typeof bookRef.current.pageFlip === "function") {
-                      bookRef.current.pageFlip()?.flip(1);
-                    }
-                  }}
-                >
-                  Novo leitor? Criar ficha de acesso
-                </button>
-
-                <TermsFooter onOpen={() => setIsTermsOpen(true)} />
-              </div>
-            </form>
-          </div>
-        </Page>
-
-        {/* Page 1 — Cadastro (vira TransitionFace durante isTransitioning) */}
-        <Page>
-          {isTransitioning ? (
-            <TransitionFace />
-          ) : (
-            <div className="flex h-full flex-col px-5 py-6 sm:px-9 sm:py-9">
-              <FaceHeader title="Nova Ficha de Leitor" compact />
-
-              <form
-                onSubmit={handleRegister}
-                className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-3.5 sm:gap-4"
-              >
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
-                  <IconField
-                    id="register-name"
-                    label="Nome"
-                    type="text"
-                    autoComplete="name"
-                    value={name}
-                    onChange={setName}
-                    placeholder="Nome"
-                    icon={<User className="h-4 w-4" strokeWidth={1.75} />}
-                  />
-                  <IconField
-                    id="register-nickname"
-                    label="NickName"
-                    type="text"
-                    autoComplete="username"
-                    value={nickName}
-                    onChange={setNickName}
-                    placeholder="NickName"
-                    icon={<AtSign className="h-4 w-4" strokeWidth={1.75} />}
-                  />
-                </div>
-
-                <IconField
-                  id="register-birthdate"
-                  label="Data de Nascimento"
-                  type="date"
-                  autoComplete="bday"
-                  value={birthDate}
-                  onChange={setBirthDate}
-                  placeholder="Data de Nascimento"
-                  icon={<Calendar className="h-4 w-4" strokeWidth={1.75} />}
-                />
-
-                <IconField
-                  id="register-email"
-                  label="E-mail"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={setEmail}
-                  placeholder="E-mail"
-                  icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
-                />
-
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
-                  <IconField
-                    id="register-password"
-                    label="Senha"
-                    type="password"
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={setPassword}
-                    placeholder="Senha"
-                    icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
-                  />
-                  <IconField
-                    id="register-confirm-password"
-                    label="Confirmar Senha"
-                    type="password"
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={setConfirmPassword}
-                    placeholder="Confirmar Senha"
-                    icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
-                  />
-                </div>
-
-                <PlatformPicker value={platform} onChange={setPlatform} />
-
-                <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-3.5">
-                  <button
-                    type="submit"
-                    disabled={registerLoading || loginLoading || isTransitioning}
-                    className={ctaButtonClassName}
-                  >
-                    {registerLoading ? "Abrindo biblioteca…" : "Cadastrar"}
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isTransitioning}
-                    className="text-sm text-book-gold/80 hover:text-book-gold mt-6 tracking-wide underline-offset-4 hover:underline z-50 relative"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (bookRef.current && typeof bookRef.current.pageFlip === "function") {
-                        bookRef.current.pageFlip()?.turnToPage(0);
-                      }
-                    }}
-                  >
-                    Já possui uma ficha? Acessar
-                  </button>
-
-                  <TermsFooter onOpen={() => setIsTermsOpen(true)} />
-                </div>
-              </form>
-            </div>
-          )}
-        </Page>
-
-        {/* Page 2 — Transição */}
-        <Page>
-          <TransitionFace />
-        </Page>
-      </FlipBook>
+        {bookPages}
+      </StableFlipBook>
     </div>
 
     <TermsModal open={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
+
+    {showWelcomeModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-300">
+        <div className="bg-book-blue border-2 border-book-gold/50 p-8 max-w-md w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
+          <div className="absolute top-2 left-2 border-t border-l border-book-gold/50 w-4 h-4"></div>
+          <div className="absolute top-2 right-2 border-t border-r border-book-gold/50 w-4 h-4"></div>
+          <div className="absolute bottom-2 left-2 border-b border-l border-book-gold/50 w-4 h-4"></div>
+          <div className="absolute bottom-2 right-2 border-b border-r border-book-gold/50 w-4 h-4"></div>
+
+          <Feather className="w-12 h-12 text-book-gold mb-6 opacity-90" />
+
+          <h2 className="font-display text-2xl text-book-gold mb-4">
+            O Tinteiro Está Cheio
+          </h2>
+
+          <p className="font-body text-book-paper/80 leading-relaxed mb-8">
+            Sua ficha foi selada com sucesso. As páginas em branco aguardam pelas memórias das suas maiores jornadas, Escritor.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowWelcomeModal(false);
+              const displayName =
+                nickName.trim() ||
+                name.trim() ||
+                email.trim().split("@")[0] ||
+                "Escritor";
+              openLibraryWithPageFlip(displayName, "register");
+            }}
+            className="bg-book-gold text-book-blue font-display px-8 py-3 tracking-widest hover:bg-book-gold/90 transition-colors uppercase text-sm"
+          >
+            Abrir o Diário
+          </button>
+        </div>
+      </div>
+    )}
     </>
   );
 }

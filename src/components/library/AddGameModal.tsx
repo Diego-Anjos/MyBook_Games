@@ -13,9 +13,12 @@ import Image from "next/image";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { ptBR } from "date-fns/locale";
-import { Gamepad2, Search } from "lucide-react";
+import { Gamepad2, PenTool, Search } from "lucide-react";
 import type { Game } from "@/data/mock-games";
+import type { GameInsert, GameRow, GameUpdate } from "@/lib/database";
+import { mapGameRow } from "@/lib/games";
 import type { IgdbSearchResult } from "@/lib/igdb/types";
+import { supabase } from "@/lib/supabase";
 import { PlatformIcon } from "@/components/library/PlatformIcon";
 
 type ModalStep = "search" | "details";
@@ -77,20 +80,6 @@ function developerName(game: IgdbSearchResult): string | null {
 
 function genreList(game: IgdbSearchResult): string[] {
   return [...new Set(game.genres.map((name) => name.trim()).filter(Boolean))];
-}
-
-function splitDateTime(value: Date | null): { date: string; time: string } | null {
-  if (!value || Number.isNaN(value.getTime())) return null;
-
-  const day = String(value.getDate()).padStart(2, "0");
-  const month = MONTHS[value.getMonth()];
-  const hours = String(value.getHours()).padStart(2, "0");
-  const minutes = String(value.getMinutes()).padStart(2, "0");
-
-  return {
-    date: `${day} ${month} ${value.getFullYear()}`,
-    time: `${hours}:${minutes}`,
-  };
 }
 
 function hoursBetween(start: Date | null, end: Date | null): number {
@@ -192,12 +181,16 @@ export default function AddGameModal({
     null,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [endedAt, setEndedAt] = useState<Date | null>(null);
+  const [dateWarning, setDateWarning] = useState("");
   const [platform, setPlatform] = useState<Platform>("pc");
   const [rating, setRating] = useState("8");
+  const [playtime, setPlaytime] = useState("");
   const [narrative, setNarrative] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   const editSessionId = open && editingGame ? editingGame.id : null;
   const [loadedEditId, setLoadedEditId] = useState<string | null>(null);
@@ -211,6 +204,7 @@ export default function AddGameModal({
       setResults([]);
       setNarrative(editingGame.description);
       setRating(String(editingGame.rating));
+      setPlaytime(editingGame.playtimeHours ? String(editingGame.playtimeHours) : "");
       setPlatform(platformFromLabel(editingGame.platform));
       setStartedAt(
         parseSessionDate(editingGame.startedAt, editingGame.startTime),
@@ -232,9 +226,12 @@ export default function AddGameModal({
     setIsSubmitting(false);
     setStartedAt(null);
     setEndedAt(null);
+    setDateWarning("");
     setPlatform("pc");
     setRating("8");
+    setPlaytime("");
     setNarrative("");
+    setFormError(null);
   }
 
   useEffect(() => {
@@ -331,65 +328,137 @@ export default function AddGameModal({
     if (isSubmitting) return;
     if (!editingGame && !selectedGame) return;
 
-    const started = splitDateTime(startedAt);
-    const ended = splitDateTime(endedAt);
-    const finished = ended != null;
+    const finished = endedAt != null;
     const platformLabel =
       PLATFORMS.find((item) => item.id === platform)?.label ?? "PC";
     const parsedRating = Number.parseFloat(rating);
     const safeRating = Number.isFinite(parsedRating)
       ? Math.min(10, Math.max(0, parsedRating))
       : 0;
-    const diaryYear = startedAt
-      ? startedAt.getFullYear()
-      : new Date().getFullYear();
 
-    const session = {
-      startedAt: started?.date ?? "—",
-      startTime: started?.time ?? "—",
-      completedAt: finished ? ended.date : null,
-      endTime: finished ? ended.time : null,
-      playtimeHours: finished ? hoursBetween(startedAt, endedAt) : 0,
-      zerado: finished,
-      description: narrative.trim(),
+    const calculatedPlaytime = finished ? hoursBetween(startedAt, endedAt) : 0;
+    const parsedManualPlaytime = Math.max(
+      0,
+      Math.round(Number(playtime.replace(/[^\d.]/g, "")) || 0),
+    );
+    const safePlaytime = calculatedPlaytime > 0 ? calculatedPlaytime : parsedManualPlaytime;
+
+    const sessionFields: GameUpdate = {
+      start_time: startedAt ? startedAt.toISOString() : null,
+      end_time: finished && endedAt ? endedAt.toISOString() : null,
       platform: platformLabel,
+      playtime: safePlaytime,
       rating: safeRating,
+      narrative: narrative.trim(),
+      is_cleared: finished,
     };
 
-    let newGame: Game;
+    setFormError(null);
+    setIsSubmitting(true);
 
-    if (editingGame) {
-      newGame = { ...editingGame, ...session };
-    } else if (selectedGame) {
-      const genres = genreList(selectedGame);
-      const developer = developerName(selectedGame) ?? "";
-      const publisher = selectedGame.publisher?.trim() ?? "";
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      newGame = {
-        id: Date.now().toString(),
-        title: selectedGame.name,
-        coverUrl:
-          coverImageUrl(selectedGame.coverUrl) ??
-          `https://picsum.photos/seed/mbg-${selectedGame.id}/400`,
-        year: releaseYear(selectedGame) ?? diaryYear,
-        synopsis: selectedGame.summary?.trim() ?? "",
-        developer,
-        publisher,
-        genre: genres.join(", ") || "—",
-        genres,
-        fullReleaseDate: selectedGame.fullReleaseDate?.trim() ?? "",
-        ...session,
-      };
-    } else {
+    if (!user) {
+      setIsSubmitting(false);
+      setFormError("A sessão expirou. Entre novamente na biblioteca.");
       return;
     }
 
-    onAddGame(newGame);
-    setIsSubmitting(true);
+    let saved: GameRow | null = null;
+    let saveError: string | null = null;
 
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
-    resetAll();
-    onClose();
+    if (editingGame) {
+      console.log("[AddGameModal] UPDATE payload:", sessionFields);
+
+      const { data, error } = await supabase
+        .from("games")
+        .update(sessionFields)
+        .eq("id", editingGame.id)
+        .eq("user_id", user.id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error(
+          "[AddGameModal] Erro Supabase (UPDATE) —",
+          "message:", error.message,
+          "| details:", error.details,
+          "| hint:", error.hint,
+          "| code:", error.code,
+        );
+      }
+
+      saved = (data as GameRow | null) ?? null;
+      saveError = error
+        ? `${error.message}${error.details ? ` (${error.details})` : ""}${error.hint ? ` — ${error.hint}` : ""}`
+        : null;
+    } else if (selectedGame) {
+      const genres = genreList(selectedGame);
+      const payload: GameInsert = {
+        user_id: user.id,
+        igdb_id: selectedGame.id,
+        title: selectedGame.name,
+        cover_url:
+          coverImageUrl(selectedGame.coverUrl) ??
+          `https://picsum.photos/seed/mbg-${selectedGame.id}/400`,
+        developer: developerName(selectedGame),
+        publisher: selectedGame.publisher?.trim() || null,
+        release_date: selectedGame.firstReleaseDate,
+        genres,
+        synopsis: selectedGame.summary?.trim() || null,
+        ...sessionFields,
+      };
+
+      console.log("[AddGameModal] INSERT payload:", payload);
+
+      const { data, error } = await supabase
+        .from("games")
+        .insert(payload)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error(
+          "[AddGameModal] Erro Supabase (INSERT) —",
+          "message:", error.message,
+          "| details:", error.details,
+          "| hint:", error.hint,
+          "| code:", error.code,
+        );
+      }
+
+      saved = (data as GameRow | null) ?? null;
+      saveError = error
+        ? `${error.message}${error.details ? ` (${error.details})` : ""}${error.hint ? ` — ${error.hint}` : ""}`
+        : null;
+    } else {
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (saveError || !saved) {
+      setIsSubmitting(false);
+      const lower = (saveError ?? "").toLowerCase();
+      if (lower.includes("duplicate") || lower.includes("unique")) {
+        setFormError("Este jogo já tem uma página no seu diário.");
+      } else {
+        setFormError(`Não foi possível guardar esta página. ${saveError ?? ""}`.trim());
+      }
+      return;
+    }
+
+    onAddGame(mapGameRow(saved));
+
+    if (editingGame) {
+      // Na edição exibe o modal de sucesso; o onClose é chamado pelo botão do modal.
+      setIsSubmitting(false);
+      setShowSuccessModal(true);
+    } else {
+      resetAll();
+      onClose();
+    }
   }
 
   if (!open) return null;
@@ -596,7 +665,16 @@ export default function AddGameModal({
                   </span>
                   <DatePicker
                     selected={startedAt}
-                    onChange={(date) => setStartedAt(date)}
+                    onChange={(date) => {
+                      setStartedAt(date);
+                      if (endedAt && date && date > endedAt) {
+                        setEndedAt(null);
+                        setDateWarning(
+                          "A jornada não pode terminar antes de começar! A data final foi redefinida.",
+                        );
+                        setTimeout(() => setDateWarning(""), 5000);
+                      }
+                    }}
                     showTimeSelect
                     timeFormat="HH:mm"
                     timeCaption="Hora"
@@ -614,18 +692,35 @@ export default function AddGameModal({
                   </span>
                   <DatePicker
                     selected={endedAt}
-                    onChange={(date) => setEndedAt(date)}
+                    onChange={(date) => {
+                      if (startedAt && date && date < startedAt) {
+                        setDateWarning(
+                          "A jornada não pode terminar antes de começar!",
+                        );
+                        setTimeout(() => setDateWarning(""), 5000);
+                      } else {
+                        setEndedAt(date);
+                        setDateWarning("");
+                      }
+                    }}
                     showTimeSelect
                     timeFormat="HH:mm"
                     timeCaption="Hora"
                     dateFormat="dd/MM/yyyy HH:mm"
                     locale={ptBR}
+                    minDate={startedAt ?? undefined}
                     wrapperClassName="w-full"
                     popperContainer={CalendarPopper}
                     className={dateFieldClassName}
                   />
                 </label>
               </div>
+
+              {dateWarning && (
+                <p className="col-span-full text-red-400/90 text-xs mt-2 italic font-body text-center bg-red-900/20 py-1.5 px-3 border border-red-500/30 rounded-sm transition-all animate-in fade-in zoom-in duration-300">
+                  ✍️ {dateWarning}
+                </p>
+              )}
 
               <fieldset className="flex flex-col gap-2.5">
                 <legend className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
@@ -664,25 +759,45 @@ export default function AddGameModal({
                 </div>
               </fieldset>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
-                  Nota (0 a 10)
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.5}
-                  value={rating}
-                  onChange={(e) => setRating(e.target.value)}
-                  required
-                  className="
-                    w-24 bg-transparent py-2 font-body text-sm text-book-paper
-                    outline-none border-0 border-b border-book-gold/55
-                    focus:border-book-gold
-                  "
-                />
-              </label>
+              <div className="grid grid-cols-2 gap-6">
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
+                    Nota (0 a 10)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.5}
+                    value={rating}
+                    onChange={(e) => setRating(e.target.value)}
+                    required
+                    className="
+                      w-full bg-transparent py-2 font-body text-sm text-book-paper
+                      outline-none border-0 border-b border-book-gold/55
+                      focus:border-book-gold
+                    "
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
+                    Horas Jogadas
+                  </span>
+                  <input
+                    type="text"
+                    value={playtime}
+                    onChange={(e) => setPlaytime(e.target.value)}
+                    placeholder="Ex: 45"
+                    className="
+                      w-full bg-transparent py-2 font-body text-sm text-book-paper
+                      placeholder:text-book-gold/35
+                      outline-none border-0 border-b border-book-gold/55
+                      focus:border-book-gold
+                    "
+                  />
+                </label>
+              </div>
 
               <label className="flex flex-col gap-1.5">
                 <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
@@ -703,7 +818,15 @@ export default function AddGameModal({
               </label>
             </div>
 
-            <div className="shrink-0 border-t border-book-gold/20 px-6 py-4">
+            <div className="shrink-0 space-y-3 border-t border-book-gold/20 px-6 py-4">
+              {formError ? (
+                <p
+                  role="alert"
+                  className="rounded-sm bg-book-paper px-3 py-2 text-center font-body text-sm text-red-900/80"
+                >
+                  {formError}
+                </p>
+              ) : null}
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -726,6 +849,39 @@ export default function AddGameModal({
           </form>
         ) : null}
       </aside>
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-300">
+          <div className="bg-book-blue border-2 border-book-gold/50 p-8 max-w-sm w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
+            <div className="absolute top-2 left-2 border-t border-l border-book-gold/50 w-4 h-4" />
+            <div className="absolute top-2 right-2 border-t border-r border-book-gold/50 w-4 h-4" />
+            <div className="absolute bottom-2 left-2 border-b border-l border-book-gold/50 w-4 h-4" />
+            <div className="absolute bottom-2 right-2 border-b border-r border-book-gold/50 w-4 h-4" />
+
+            <PenTool className="w-10 h-10 text-book-gold mb-5 opacity-90" />
+
+            <h2 className="font-display text-xl text-book-gold mb-3">
+              Página Reescrita
+            </h2>
+
+            <p className="font-body text-book-paper/80 text-sm leading-relaxed mb-6">
+              As memórias desta jornada foram atualizadas com sucesso no seu diário.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowSuccessModal(false);
+                resetAll();
+                onClose();
+              }}
+              className="bg-book-gold text-book-blue font-display px-6 py-2 tracking-widest hover:bg-book-gold/90 transition-colors uppercase text-xs"
+            >
+              Continuar Lendo
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

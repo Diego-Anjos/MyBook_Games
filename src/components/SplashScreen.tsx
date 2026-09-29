@@ -116,10 +116,12 @@ function OrnamentedLoader({ progress }: { progress: number }) {
           "
         >
           <div className="pointer-events-none absolute inset-[2px] rounded-[1px] border border-book-gold/25" />
-          <div
-            className="splash-loader-fill absolute inset-y-[3px] left-[3px] right-[3px] origin-left rounded-[1px]"
-            style={{ transform: `scaleX(${clamped / 100})` }}
-          />
+          <div className="absolute inset-y-[3px] right-[3px] left-[3px]">
+            <div
+              className="splash-loader-fill h-full rounded-[1px]"
+              style={{ width: `${clamped}%` }}
+            />
+          </div>
         </div>
 
         <svg
@@ -203,24 +205,33 @@ export default function SplashScreen({
   const [gone, setGone] = useState(false);
 
   useEffect(() => {
-    let frame = 0;
-    const start = performance.now();
+    const start = Date.now();
+    let finished = false;
 
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / durationMs);
+    const complete = () => {
+      if (finished) return;
+      finished = true;
+      window.clearInterval(interval);
+      setProgress(100);
+      setLoadDone(true);
+    };
+
+    const interval = window.setInterval(() => {
+      const elapsed = Date.now() - start;
+      const t = Math.min(1, Math.max(0, elapsed / durationMs));
       const eased = 1 - Math.pow(1 - t, 2.4);
       setProgress(eased * 100);
 
-      if (t < 1) {
-        frame = requestAnimationFrame(tick);
-      } else {
-        setProgress(100);
-        setLoadDone(true);
-      }
-    };
+      if (t >= 1) complete();
+    }, 50);
 
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    const failsafe = window.setTimeout(complete, durationMs + 250);
+
+    return () => {
+      finished = true;
+      window.clearInterval(interval);
+      window.clearTimeout(failsafe);
+    };
   }, [durationMs]);
 
   useEffect(() => {
@@ -230,6 +241,15 @@ export default function SplashScreen({
     );
     return () => window.clearTimeout(id);
   }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setProgress(100);
+      setLoadDone(true);
+      setWriteDone(true);
+    }, durationMs + 500);
+    return () => window.clearTimeout(id);
+  }, [durationMs]);
 
   useEffect(() => {
     if (!loadDone || !writeDone) return;
