@@ -222,3 +222,21 @@ h6 {
   color: var(--color-book-blue, #0B1426) !important;
   stroke: rgba(201, 168, 76, 0.3) !important;
 }
+
+.synopsis-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 168, 76, 0.5) transparent;
+}
+.synopsis-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.synopsis-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.synopsis-scroll::-webkit-scrollbar-thumb {
+  background: rgba(201, 168, 76, 0.5); /* book-gold */
+  border-radius: 4px;
+}
+.synopsis-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 168, 76, 0.8);
+}

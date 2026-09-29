@@ -11,6 +11,8 @@ export type IgdbSearchResult = {
   publisher: string | null;
   /** Data de lançamento formatada em pt-BR (ex.: 04 de jun. de 2019). */
   fullReleaseDate: string | null;
+  /** Enredo oficial do IGDB, quando existir. */
+  storyline: string | null;
   companies: string[];
   genres: string[];
 };

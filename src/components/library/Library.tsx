@@ -22,10 +22,21 @@ type LibraryProps = {
 export default function Library({ userName }: LibraryProps) {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [games, setGames] = useState<Game[]>([]);
 
-  const handleAddGame = (newGame: Game) =>
-    setGames((prev) => [newGame, ...prev]);
+  const handleAddGame = (game: Game) => {
+    setGames((prev) => {
+      const index = prev.findIndex((item) => item.id === game.id);
+      if (index === -1) return [game, ...prev];
+      return prev.map((item) => (item.id === game.id ? game : item));
+    });
+  };
+
+  function closeGameModal() {
+    setAddOpen(false);
+    setEditingGame(null);
+  }
 
   const filtered = useMemo(() => {
     if (selectedYear === null) return games;
@@ -64,13 +75,17 @@ export default function Library({ userName }: LibraryProps) {
             </p>
           ) : null}
 
-          <HTMLBook games={filtered} />
+          <HTMLBook
+            games={filtered}
+            onEdit={(game) => setEditingGame(game)}
+          />
         </div>
       </div>
 
       <AddGameModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
+        open={addOpen || editingGame !== null}
+        editingGame={editingGame}
+        onClose={closeGameModal}
         onAddGame={handleAddGame}
       />
     </>

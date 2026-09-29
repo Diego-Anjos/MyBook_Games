@@ -31,6 +31,7 @@ type FlipBookHandle = {
 
 type HTMLBookProps = {
   games: Game[];
+  onEdit: (game: Game) => void;
 };
 
 /**
@@ -54,7 +55,7 @@ type FlipPageProps = {
 
 function EmptyPrefacePage() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center border border-book-gold/30 p-8 text-center">
+    <div className="flex h-full w-full flex-col items-center justify-center border border-book-gold/30 p-6 text-center md:p-8">
       <Feather className="mb-6 h-12 w-12 text-book-gold opacity-80" />
       <h2 className="mb-4 font-display text-3xl text-book-gold">
         O Diário em Branco
@@ -69,7 +70,7 @@ function EmptyPrefacePage() {
 
 function EmptyInstructionsPage() {
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center border border-book-gold/30 p-8 text-center">
+    <div className="relative flex h-full w-full flex-col items-center justify-center border border-book-gold/30 p-6 text-center md:p-8">
       <div className="absolute top-8 right-8 animate-bounce text-book-gold/50">
         <ArrowUpRight className="h-8 w-8" />
       </div>
@@ -99,7 +100,9 @@ const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
         "
       >
         <div className="flex h-full flex-col">
-          <div className="min-h-0 flex-1">{children}</div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {children}
+          </div>
           <p className="shrink-0 py-1.5 text-center font-display text-[0.6rem] tracking-[0.25em] text-book-gold/45 sm:py-2 sm:text-[0.65rem]">
             {number} / {total}
           </p>
@@ -109,11 +112,11 @@ const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
   },
 );
 
-export default function HTMLBook({ games }: HTMLBookProps) {
+export default function HTMLBook({ games, onEdit }: HTMLBookProps) {
   const bookRef = useRef<FlipBookHandle>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageCount, setPageCount] = useState(0);
-  const { isMobile, ready } = useViewport();
+  const { isMobile, ready, height } = useViewport();
 
   // Portrait (1 página): não precisa de par; landscape (2): sim
   const usePortrait = isMobile;
@@ -174,8 +177,13 @@ export default function HTMLBook({ games }: HTMLBookProps) {
     Record<string, unknown> & { children?: ReactNode }
   >;
 
+  const portraitHeight = height
+    ? Math.min(680, Math.max(360, height - 404))
+    : 480;
+
   const bookKey = [
     usePortrait ? "portrait" : "landscape",
+    usePortrait ? `h${portraitHeight}` : "desk",
     isEmpty ? "empty" : pages.length,
     isEmpty ? "preface" : games.map((g) => g.id).join("-"),
   ].join("|");
@@ -197,12 +205,12 @@ export default function HTMLBook({ games }: HTMLBookProps) {
           className="library-html-book mx-auto"
           style={{}}
           width={usePortrait ? 340 : 480}
-          height={usePortrait ? 560 : 680}
+          height={usePortrait ? portraitHeight : 680}
           size="stretch"
-          minWidth={usePortrait ? 260 : 320}
-          maxWidth={usePortrait ? 420 : 520}
-          minHeight={usePortrait ? 440 : 480}
-          maxHeight={usePortrait ? 680 : 760}
+          minWidth={300}
+          maxWidth={usePortrait ? 1000 : 520}
+          minHeight={usePortrait ? 360 : 480}
+          maxHeight={usePortrait ? portraitHeight : 760}
           drawShadow={true}
           maxShadowOpacity={0.55}
           showCover={false}
@@ -237,9 +245,9 @@ export default function HTMLBook({ games }: HTMLBookProps) {
                 total={pages.length}
               >
                 {game ? (
-                  <GameCard game={game} />
+                  <GameCard game={game} onEdit={onEdit} />
                 ) : (
-                  <p className="flex h-full items-center justify-center font-body text-sm text-book-gold/40 italic">
+                  <p className="flex h-full items-center justify-center p-6 font-body text-sm text-book-gold/40 italic md:p-8">
                     Página em branco
                   </p>
                 )}

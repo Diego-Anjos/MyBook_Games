@@ -16,6 +16,7 @@ import { ptBR } from "date-fns/locale";
 import { Gamepad2, Search } from "lucide-react";
 import type { Game } from "@/data/mock-games";
 import type { IgdbSearchResult } from "@/lib/igdb/types";
+import { PlatformIcon } from "@/components/library/PlatformIcon";
 
 type ModalStep = "search" | "details";
 
@@ -47,6 +48,7 @@ type AddGameModalProps = {
   open: boolean;
   onClose: () => void;
   onAddGame: (game: Game) => void;
+  editingGame?: Game | null;
 };
 
 type SearchResponse = {
@@ -99,6 +101,42 @@ function hoursBetween(start: Date | null, end: Date | null): number {
   return Math.round((ended - started) / 3_600_000);
 }
 
+function platformFromLabel(label: string): Platform {
+  const match = PLATFORMS.find(
+    (item) => item.label.toLowerCase() === label.trim().toLowerCase(),
+  );
+  return match?.id ?? "pc";
+}
+
+/** Reconstrói o DatePicker a partir de "05 Set 2026" e "14:30". */
+function parseSessionDate(
+  dateLabel: string,
+  timeLabel: string | null,
+): Date | null {
+  const match = dateLabel
+    .trim()
+    .match(/^(\d{1,2})\s+([A-Za-zçÇ]+)\s+(\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const monthIndex = MONTHS.findIndex(
+    (month) => month.toLowerCase() === match[2].toLowerCase(),
+  );
+  const year = Number(match[3]);
+  if (monthIndex < 0 || !day || !year) return null;
+
+  let hours = 0;
+  let minutes = 0;
+  const time = timeLabel?.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (time && timeLabel !== "—") {
+    hours = Number(time[1]);
+    minutes = Number(time[2]);
+  }
+
+  const date = new Date(year, monthIndex, day, hours, minutes, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 const dateFieldClassName = `
   w-full bg-transparent py-2 font-body text-sm text-book-paper
   outline-none border-0 border-b border-book-gold/55
@@ -141,6 +179,7 @@ export default function AddGameModal({
   open,
   onClose,
   onAddGame,
+  editingGame = null,
 }: AddGameModalProps) {
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -159,6 +198,30 @@ export default function AddGameModal({
   const [platform, setPlatform] = useState<Platform>("pc");
   const [rating, setRating] = useState("8");
   const [narrative, setNarrative] = useState("");
+
+  const editSessionId = open && editingGame ? editingGame.id : null;
+  const [loadedEditId, setLoadedEditId] = useState<string | null>(null);
+
+  if (editSessionId !== loadedEditId) {
+    setLoadedEditId(editSessionId);
+    if (open && editingGame) {
+      setStep("details");
+      setSelectedGame(null);
+      setQuery("");
+      setResults([]);
+      setNarrative(editingGame.description);
+      setRating(String(editingGame.rating));
+      setPlatform(platformFromLabel(editingGame.platform));
+      setStartedAt(
+        parseSessionDate(editingGame.startedAt, editingGame.startTime),
+      );
+      setEndedAt(
+        editingGame.completedAt
+          ? parseSessionDate(editingGame.completedAt, editingGame.endTime)
+          : null,
+      );
+    }
+  }
 
   function resetAll() {
     setStep("search");
@@ -246,7 +309,14 @@ export default function AddGameModal({
   }, [query, open, step]);
 
   function handleSelectGame(game: IgdbSearchResult) {
+    const historiaBase =
+      game.storyline?.trim() ||
+      game.summary?.trim() ||
+      "História não informada nos arquivos.";
+    const textoInicial = `📖 Enredo Oficial:\n${historiaBase}\n\n🖋️ Minhas memórias da jornada:\n`;
+
     setSelectedGame(game);
+    setNarrative(textoInicial);
     setStep("details");
   }
 
@@ -258,7 +328,8 @@ export default function AddGameModal({
 
   async function handleRegister(e: FormEvent) {
     e.preventDefault();
-    if (!selectedGame || isSubmitting) return;
+    if (isSubmitting) return;
+    if (!editingGame && !selectedGame) return;
 
     const started = splitDateTime(startedAt);
     const ended = splitDateTime(endedAt);
@@ -273,33 +344,45 @@ export default function AddGameModal({
       ? startedAt.getFullYear()
       : new Date().getFullYear();
 
-    const genres = genreList(selectedGame);
-    const developer = developerName(selectedGame) ?? "";
-    const publisher = selectedGame.publisher?.trim() ?? "";
-
-    const newGame: Game = {
-      id: Date.now().toString(),
-      title: selectedGame.name,
-      coverUrl:
-        coverImageUrl(selectedGame.coverUrl) ??
-        `https://picsum.photos/seed/mbg-${selectedGame.id}/400`,
+    const session = {
       startedAt: started?.date ?? "—",
       startTime: started?.time ?? "—",
       completedAt: finished ? ended.date : null,
       endTime: finished ? ended.time : null,
       playtimeHours: finished ? hoursBetween(startedAt, endedAt) : 0,
-      year: releaseYear(selectedGame) ?? diaryYear,
       zerado: finished,
       description: narrative.trim(),
-      synopsis: selectedGame.summary?.trim() ?? "",
-      developer,
-      publisher,
       platform: platformLabel,
-      genre: genres.join(", ") || "—",
-      genres,
-      fullReleaseDate: selectedGame.fullReleaseDate?.trim() ?? "",
       rating: safeRating,
     };
+
+    let newGame: Game;
+
+    if (editingGame) {
+      newGame = { ...editingGame, ...session };
+    } else if (selectedGame) {
+      const genres = genreList(selectedGame);
+      const developer = developerName(selectedGame) ?? "";
+      const publisher = selectedGame.publisher?.trim() ?? "";
+
+      newGame = {
+        id: Date.now().toString(),
+        title: selectedGame.name,
+        coverUrl:
+          coverImageUrl(selectedGame.coverUrl) ??
+          `https://picsum.photos/seed/mbg-${selectedGame.id}/400`,
+        year: releaseYear(selectedGame) ?? diaryYear,
+        synopsis: selectedGame.summary?.trim() ?? "",
+        developer,
+        publisher,
+        genre: genres.join(", ") || "—",
+        genres,
+        fullReleaseDate: selectedGame.fullReleaseDate?.trim() ?? "",
+        ...session,
+      };
+    } else {
+      return;
+    }
 
     onAddGame(newGame);
     setIsSubmitting(true);
@@ -310,6 +393,17 @@ export default function AddGameModal({
   }
 
   if (!open) return null;
+
+  const isEditing = editingGame != null;
+  const sheetTitle = selectedGame?.name ?? editingGame?.title ?? "";
+  const sheetCover = selectedGame?.coverUrl ?? editingGame?.coverUrl ?? null;
+  const sheetMeta = (
+    selectedGame
+      ? [releaseYear(selectedGame), developerName(selectedGame)]
+      : [editingGame?.year, editingGame?.developer]
+  )
+    .filter((part) => part != null && part !== "")
+    .join(" · ");
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -339,13 +433,21 @@ export default function AddGameModal({
         <header className="relative z-10 flex items-start justify-between gap-4 border-b border-book-gold/25 px-6 py-5">
           <div>
             <p className="font-display text-[0.65rem] tracking-[0.3em] text-book-gold/55 uppercase">
-              {step === "search" ? "Nova página" : "Diário de sessão"}
+              {step === "search" && !isEditing
+                ? "Nova página"
+                : isEditing
+                  ? "Revisão"
+                  : "Diário de sessão"}
             </p>
             <h2
               id={titleId}
               className="mt-1 font-display text-2xl tracking-wide"
             >
-              {step === "search" ? "Adicionar Jogo" : "Preencher ficha"}
+              {step === "search" && !isEditing
+                ? "Adicionar Jogo"
+                : isEditing
+                  ? "Editar página"
+                  : "Preencher ficha"}
             </h2>
           </div>
           <button
@@ -357,7 +459,7 @@ export default function AddGameModal({
           </button>
         </header>
 
-        {step === "search" ? (
+        {step === "search" && !isEditing ? (
           <>
             <div className="relative z-10 border-b border-book-gold/20 px-6 py-4">
               <label htmlFor="game-search" className="sr-only">
@@ -450,36 +552,38 @@ export default function AddGameModal({
               ) : null}
             </div>
           </>
-        ) : selectedGame ? (
+        ) : isEditing || selectedGame ? (
           <form
             onSubmit={(e) => void handleRegister(e)}
             className="relative z-10 flex min-h-0 flex-1 flex-col"
           >
             <div className="shrink-0 border-b border-book-gold/20 px-6 py-4">
-              <button
-                type="button"
-                onClick={handleBackToSearch}
-                className="font-body text-sm text-book-gold/70 transition hover:text-book-gold"
-              >
-                ← Voltar à busca
-              </button>
+              {isEditing ? null : (
+                <button
+                  type="button"
+                  onClick={handleBackToSearch}
+                  className="font-body text-sm text-book-gold/70 transition hover:text-book-gold"
+                >
+                  ← Voltar à busca
+                </button>
+              )}
 
-              <div className="mt-4 flex items-center gap-3">
+              <div className={`${isEditing ? "" : "mt-4"} flex items-center gap-3`}>
                 <GameCover
-                  url={selectedGame.coverUrl}
+                  url={sheetCover}
                   sizes="48px"
                   iconClassName="h-5 w-5 text-book-gold/70"
                   frameClassName="relative h-16 w-12 shrink-0 overflow-hidden rounded-sm border border-book-gold/40 bg-book-blue-light"
                 />
                 <div className="min-w-0">
                   <p className="font-display text-lg leading-snug tracking-wide text-book-gold">
-                    {selectedGame.name}
+                    {sheetTitle}
                   </p>
-                  <p className="mt-0.5 font-body text-xs text-book-paper/60">
-                    {[releaseYear(selectedGame), developerName(selectedGame)]
-                      .filter((part) => part != null && part !== "")
-                      .join(" · ")}
-                  </p>
+                  {sheetMeta ? (
+                    <p className="mt-0.5 font-body text-xs text-book-paper/60">
+                      {sheetMeta}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -542,7 +646,7 @@ export default function AddGameModal({
                         aria-checked={selected}
                         onClick={() => setPlatform(item.id)}
                         className={`
-                          flex min-h-10 items-center justify-center rounded-sm px-2
+                          flex min-h-10 items-center justify-center gap-2 rounded-sm px-2
                           font-display text-[0.65rem] tracking-[0.08em] uppercase
                           border transition duration-200
                           ${
@@ -552,6 +656,7 @@ export default function AddGameModal({
                           }
                         `}
                       >
+                        <PlatformIcon platform={item.label} />
                         {item.label}
                       </button>
                     );
@@ -611,7 +716,11 @@ export default function AddGameModal({
                   disabled:cursor-wait disabled:opacity-70
                 "
               >
-                {isSubmitting ? "Salvando..." : "Registrar no Livro"}
+                {isSubmitting
+                  ? "Salvando..."
+                  : isEditing
+                    ? "Salvar Alterações"
+                    : "Registrar no Livro"}
               </button>
             </div>
           </form>

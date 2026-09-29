@@ -172,9 +172,9 @@ export default function LibraryHeader({
   return (
     <>
       <header className="relative border-b border-book-gold/25 pb-4 sm:pb-5">
-        <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:gap-4">
+        <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
           {/* Perfil + seletor de anos */}
-          <div className="flex min-w-0 flex-col gap-2.5 md:flex-1 md:justify-start">
+          <div className="flex w-full min-w-0 flex-col gap-2.5 md:flex-1 md:justify-start">
             <div className="flex w-fit items-center">
               <button
                 type="button"
@@ -222,7 +222,7 @@ export default function LibraryHeader({
               </button>
             </div>
 
-            <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+            <div className="flex w-full min-w-0 items-center gap-1 sm:gap-2">
               <button
                 type="button"
                 onClick={goPrev}
@@ -233,10 +233,10 @@ export default function LibraryHeader({
               </button>
               <div
                 className="
-                  flex min-w-0 flex-1 items-center gap-3 overflow-x-auto
+                  flex w-full items-center gap-3 overflow-x-auto
                   whitespace-nowrap hide-scrollbar
                   font-display text-sm tracking-wide
-                  scroll-smooth
+                  scroll-smooth md:w-auto
                   [-webkit-overflow-scrolling:touch]
                 "
               >
@@ -294,7 +294,7 @@ export default function LibraryHeader({
           </div>
 
           {/* Ação à direita */}
-          <div className="flex min-w-0 items-center justify-start md:flex-1 md:justify-end">
+          <div className="flex w-full min-w-0 items-center justify-center md:w-auto md:flex-1 md:justify-end">
             <button
               type="button"
               onClick={onAddGame}

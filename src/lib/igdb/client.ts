@@ -7,6 +7,7 @@ type IgdbGameRaw = {
   id: number;
   name: string;
   summary?: string;
+  storyline?: string;
   first_release_date?: number;
   cover?: { url?: string };
   involved_companies?: Array<{
@@ -87,7 +88,7 @@ export async function searchIgdbGames(
   const clientId = getTwitchClientId();
 
   const body = `
-fields id, name, cover.url, first_release_date, summary, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher;
+fields id, name, cover.url, first_release_date, summary, storyline, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher;
 search "${escapeApicalypseString(trimmed)}";
 where version_parent = null;
 limit ${Math.min(Math.max(limit, 1), 50)};
@@ -97,7 +98,7 @@ limit ${Math.min(Math.max(limit, 1), 50)};
     method: "POST",
     headers: {
       Accept: "application/json",
-      "Accept-Language": "pt-BR, pt;q=0.9, en;q=0.8",
+      "Accept-Language": "pt-BR, pt-PT;q=0.9, pt;q=0.8",
       "Client-ID": clientId,
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "text/plain",
@@ -131,6 +132,7 @@ limit ${Math.min(Math.max(limit, 1), 50)};
         .map(translateGenre) ?? [];
 
     const summary = game.summary?.trim() || null;
+    const storyline = game.storyline?.trim() || null;
     const fullReleaseDate =
       typeof game.first_release_date === "number"
         ? releaseDateFormatter.format(new Date(game.first_release_date * 1000))
@@ -146,6 +148,7 @@ limit ${Math.min(Math.max(limit, 1), 50)};
       firstReleaseYear: releaseDate ? releaseDate.getUTCFullYear() : null,
       fullReleaseDate,
       summary,
+      storyline,
       developer: firstCompany(game.involved_companies, "developer"),
       publisher: firstCompany(game.involved_companies, "publisher"),
       companies: [...new Set(companies)],

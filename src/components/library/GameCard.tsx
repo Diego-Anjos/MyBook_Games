@@ -1,8 +1,12 @@
+import type { ReactNode } from "react";
 import Image from "next/image";
+import { Pen } from "lucide-react";
 import type { Game } from "@/data/mock-games";
+import { PlatformIcon } from "@/components/library/PlatformIcon";
 
 type GameCardProps = {
   game: Game;
+  onEdit: (game: Game) => void;
 };
 
 function CornerOrnament({ className }: { className?: string }) {
@@ -14,21 +18,19 @@ function CornerOrnament({ className }: { className?: string }) {
   );
 }
 
-function SpecCell({
+function SessionBlock({
   label,
   value,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 px-2 py-1.5 sm:px-2.5 sm:py-2">
-      <span className="font-display text-[0.55rem] tracking-[0.18em] text-book-gold/55 uppercase sm:text-[0.6rem]">
+    <div className="flex flex-col border border-book-gold/30 p-2 md:p-3">
+      <span className="mb-1 font-display text-xs tracking-wider text-book-gold uppercase">
         {label}
       </span>
-      <span className="truncate font-body text-[0.7rem] text-book-paper/85 sm:text-xs">
-        {value}
-      </span>
+      <span className="text-xs leading-tight text-book-paper/90 md:text-sm">{value}</span>
     </div>
   );
 }
@@ -37,93 +39,111 @@ function formatRating(rating: number): string {
   return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
 }
 
-export default function GameCard({ game }: GameCardProps) {
+export default function GameCard({ game, onEdit }: GameCardProps) {
   return (
-    <article
-      className="
-        relative flex h-full min-h-0 w-full flex-col overflow-hidden
-        bg-book-blue
-      "
-    >
+    <article className="relative flex h-full w-full flex-col bg-book-blue p-6 md:p-8">
       <CornerOrnament className="top-1.5 left-1.5 border-t border-l" />
       <CornerOrnament className="top-1.5 right-1.5 border-t border-r" />
       <CornerOrnament className="bottom-1.5 left-1.5 border-b border-l" />
       <CornerOrnament className="bottom-1.5 right-1.5 border-b border-r" />
 
       {game.zerado ? (
-        <div
-          className="
-            pointer-events-none absolute top-3 -right-7 z-20
-            w-28 rotate-45
-            bg-gradient-to-b from-[#E8D08A] via-book-gold to-[#A8842E]
-            py-0.5 text-center
-            font-display text-[0.55rem] font-semibold tracking-[0.15em] text-black uppercase
-            shadow-md sm:top-3.5 sm:-right-8 sm:w-32 sm:text-[0.6rem]
-          "
-        >
-          Zerado
+        <div className="pointer-events-none absolute top-0 right-0 z-10 h-20 w-20 overflow-hidden">
+          <div
+            className="
+              absolute top-3 -right-7 w-28 rotate-45
+              bg-gradient-to-b from-[#E8D08A] via-book-gold to-[#A8842E]
+              py-0.5 text-center
+              font-display text-[0.55rem] font-semibold tracking-[0.15em] text-black uppercase
+              shadow-md
+            "
+          >
+            Zerado
+          </div>
         </div>
       ) : null}
 
-      <div className="relative z-10 flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto hide-scrollbar p-3 sm:gap-3 sm:p-4">
-        <div className="grid shrink-0 grid-cols-[1fr_2fr] gap-6 mb-6">
-          <div className="relative aspect-[3/4] w-full overflow-hidden rounded-sm border border-book-gold/40 bg-book-blue-light">
+      <button
+        type="button"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onEdit(game);
+        }}
+        title="Editar página"
+        aria-label="Editar página"
+        className={`absolute z-20 rounded-full p-2 text-book-gold/40 transition-all duration-300 hover:bg-book-gold/10 hover:text-book-gold ${
+          game.zerado ? "top-6 right-20" : "top-4 right-4"
+        }`}
+      >
+        <Pen className="h-4 w-4" />
+      </button>
+
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="grid shrink-0 grid-cols-[4rem_1fr] gap-2 md:grid-cols-[1fr_2fr] md:gap-6">
+          <div className="relative aspect-[3/4] w-full max-h-28 overflow-hidden rounded-sm border border-book-gold/30 bg-black/20 md:max-h-44">
             <Image
               src={game.coverUrl}
               alt={`Capa de ${game.title}`}
               fill
-              sizes="180px"
-              className="h-full w-full object-cover object-center rounded-sm"
+              sizes="(max-width: 768px) 100vw, 180px"
+              className="object-contain object-center"
             />
           </div>
 
           <div className="flex min-w-0 flex-col">
-            <h2 className="font-display text-2xl leading-tight text-book-gold">
+            <h2 className="font-display text-lg leading-tight text-book-gold md:text-2xl">
               {game.title}
             </h2>
-            <p className="mt-2 font-display text-[0.65rem] tracking-[0.2em] text-book-gold/55 uppercase">
+            <p className="mt-1 font-display text-[0.65rem] tracking-[0.2em] text-book-gold/55 uppercase">
               Estúdio
             </p>
-            <p className="font-display text-base tracking-wide text-book-gold">
+            <p className="font-display text-sm tracking-wide text-book-gold md:text-base">
               {game.developer}
             </p>
-            <p className="mt-3 text-sm font-body leading-relaxed text-book-paper/80 line-clamp-5">
+            <p className="synopsis-scroll mt-1 max-h-10 overflow-y-auto pr-6 text-xs font-body leading-snug text-book-paper/80 md:mt-2 md:max-h-[4.5rem] md:text-sm md:leading-relaxed">
               {game.synopsis.trim() || "Sinopse indisponível."}
             </p>
           </div>
         </div>
 
-        {/* Ficha técnica */}
-        <section
-          aria-label="Ficha técnica"
-          className="
-            shrink-0 border border-book-gold/30
-            bg-book-blue-light/40
-          "
-        >
-          <div className="grid grid-cols-2 divide-x divide-y divide-book-gold/30 sm:grid-cols-3">
-            <SpecCell label="Data de Início" value={game.startedAt} />
-            <SpecCell label="Horário Início" value={game.startTime} />
-            <SpecCell
-              label="Data Final"
-              value={game.completedAt ?? "Em andamento"}
-            />
-            <SpecCell
-              label="Horário Final"
-              value={game.endTime ?? "—"}
-            />
-            <SpecCell label="Plataforma" value={game.platform} />
-            <SpecCell label="Horas" value={`${game.playtimeHours}h`} />
-          </div>
-        </section>
+        <div className="mb-3 grid w-full shrink-0 grid-cols-2 gap-2 md:mb-6 md:gap-4">
+          <SessionBlock
+            label="Início"
+            value={`${game.startedAt} · ${game.startTime}`}
+          />
+          <SessionBlock
+            label="Final"
+            value={
+              game.completedAt
+                ? `${game.completedAt}${game.endTime ? ` · ${game.endTime}` : ""}`
+                : "Em andamento"
+            }
+          />
+          <SessionBlock
+            label="Plataforma"
+            value={
+              <span className="flex items-center gap-2">
+                <PlatformIcon
+                  className="h-3.5 w-3.5 text-book-gold"
+                  platform={game.platform}
+                />
+                {game.platform}
+              </span>
+            }
+          />
+          <SessionBlock
+            label="Horas Jogadas"
+            value={`${game.playtimeHours}h`}
+          />
+        </div>
 
-        {/* Ficha técnica estilo Steam + Nota */}
-        <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
+        <div className="relative flex shrink-0 items-start">
           <section
             aria-label="Ficha do jogo"
-            className="min-w-0 flex-1 border border-book-gold/30 p-4"
+            className="w-full border border-book-gold/30 p-2 pr-16 md:min-w-0 md:flex-1 md:p-4 md:pr-4"
           >
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="flex flex-col gap-0.5 text-[11px] leading-tight">
               <p>
                 <span className="mr-2 font-display tracking-wider text-book-gold uppercase">
                   Título:
@@ -167,11 +187,11 @@ export default function GameCard({ game }: GameCardProps) {
 
           <div
             className="
-              flex aspect-square w-[4.25rem] shrink-0 flex-col items-center justify-center
+              absolute top-2 right-2 flex aspect-square w-12 shrink-0 flex-col items-center justify-center
               rounded-full border-2 border-book-gold
               bg-gradient-to-b from-book-blue-light to-book-blue
               shadow-[inset_0_0_12px_rgba(201,168,76,0.12)]
-              sm:w-[4.75rem]
+              md:static md:top-auto md:right-auto md:ml-4 md:w-[4.75rem]
             "
             aria-label={`Nota ${formatRating(game.rating)} de 10`}
           >
@@ -187,20 +207,14 @@ export default function GameCard({ game }: GameCardProps) {
           </div>
         </div>
 
-        {/* Narrativa / comentários */}
         <section
           aria-label="Comentários"
-          className="
-            flex min-h-0 flex-1 flex-col
-            border border-book-gold/25
-            bg-book-blue-light/25
-            px-2.5 py-2 sm:px-3 sm:py-2.5
-          "
+          className="synopsis-scroll flex min-h-0 flex-1 flex-col overflow-y-auto border border-book-gold/25 bg-book-blue-light/25 px-2.5 py-2 md:px-3 md:py-2.5"
         >
           <span className="mb-1 shrink-0 font-display text-[0.55rem] tracking-[0.18em] text-book-gold/50 uppercase">
             Narrativa
           </span>
-          <p className="min-h-0 overflow-hidden font-body text-[0.7rem] leading-relaxed text-book-paper/75 italic sm:text-xs sm:leading-relaxed">
+          <p className="font-body text-[0.7rem] leading-relaxed text-book-paper/75 italic md:text-xs md:leading-relaxed">
             {game.description}
           </p>
         </section>
