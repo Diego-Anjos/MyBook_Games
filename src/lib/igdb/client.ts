@@ -6,12 +6,57 @@ export type { IgdbSearchResult };
 type IgdbGameRaw = {
   id: number;
   name: string;
+  summary?: string;
   first_release_date?: number;
   cover?: { url?: string };
   involved_companies?: Array<{
     company?: { name?: string };
+    developer?: boolean;
+    publisher?: boolean;
   }>;
+  genres?: Array<{ name?: string }>;
 };
+
+const GENRE_LABELS: Record<string, string> = {
+  "Role-playing (RPG)": "RPG",
+  Adventure: "Aventura",
+  Shooter: "Tiro",
+  Platform: "Plataforma",
+  Puzzle: "Quebra-cabeça",
+  Racing: "Corrida",
+  Sport: "Esporte",
+  Strategy: "Estratégia",
+  Fighting: "Luta",
+  Simulator: "Simulação",
+  Tactical: "Tático",
+  "Hack and slash/Beat 'em up": "Hack and slash",
+  "Real Time Strategy (RTS)": "Estratégia em tempo real",
+  "Turn-based strategy (TBS)": "Estratégia por turnos",
+  "Card & Board Game": "Cartas e tabuleiro",
+  "Visual Novel": "Romance visual",
+  Music: "Música",
+  "Quiz/Trivia": "Quiz",
+};
+
+const releaseDateFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function translateGenre(name: string): string {
+  return GENRE_LABELS[name] ?? name;
+}
+
+function firstCompany(
+  companies: IgdbGameRaw["involved_companies"],
+  role: "developer" | "publisher",
+): string | null {
+  const match = companies?.find((entry) => entry[role] === true);
+  const name = match?.company?.name?.trim();
+  return name || null;
+}
 
 /** Converte thumbnail IGDB para capa em alta qualidade. */
 export function upgradeCoverUrl(url: string | undefined | null): string | null {
@@ -42,7 +87,7 @@ export async function searchIgdbGames(
   const clientId = getTwitchClientId();
 
   const body = `
-fields name, cover.url, first_release_date, involved_companies.company.name;
+fields id, name, cover.url, first_release_date, summary, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher;
 search "${escapeApicalypseString(trimmed)}";
 where version_parent = null;
 limit ${Math.min(Math.max(limit, 1), 50)};
@@ -52,6 +97,7 @@ limit ${Math.min(Math.max(limit, 1), 50)};
     method: "POST",
     headers: {
       Accept: "application/json",
+      "Accept-Language": "pt-BR, pt;q=0.9, en;q=0.8",
       "Client-ID": clientId,
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "text/plain",
@@ -75,8 +121,20 @@ limit ${Math.min(Math.max(limit, 1), 50)};
 
     const companies =
       game.involved_companies
-        ?.map((entry) => entry.company?.name)
+        ?.map((entry) => entry.company?.name?.trim())
         .filter((name): name is string => Boolean(name)) ?? [];
+
+    const genres =
+      game.genres
+        ?.map((entry) => entry.name?.trim())
+        .filter((name): name is string => Boolean(name))
+        .map(translateGenre) ?? [];
+
+    const summary = game.summary?.trim() || null;
+    const fullReleaseDate =
+      typeof game.first_release_date === "number"
+        ? releaseDateFormatter.format(new Date(game.first_release_date * 1000))
+        : null;
 
     return {
       id: game.id,
@@ -86,7 +144,12 @@ limit ${Math.min(Math.max(limit, 1), 50)};
         ? releaseDate.toISOString().slice(0, 10)
         : null,
       firstReleaseYear: releaseDate ? releaseDate.getUTCFullYear() : null,
+      fullReleaseDate,
+      summary,
+      developer: firstCompany(game.involved_companies, "developer"),
+      publisher: firstCompany(game.involved_companies, "publisher"),
       companies: [...new Set(companies)],
+      genres: [...new Set(genres)],
     };
   });
 }

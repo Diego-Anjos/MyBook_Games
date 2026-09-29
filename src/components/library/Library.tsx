@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import AddGameModal from "@/components/library/AddGameModal";
 import LibraryHeader from "@/components/library/LibraryHeader";
-import { LIBRARY_YEARS, MOCK_GAMES } from "@/data/mock-games";
+import { LIBRARY_YEARS, type Game } from "@/data/mock-games";
 
 const HTMLBook = dynamic(() => import("@/components/library/HTMLBook"), {
   ssr: false,
@@ -22,11 +22,15 @@ type LibraryProps = {
 export default function Library({ userName }: LibraryProps) {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [games, setGames] = useState<Game[]>([]);
+
+  const handleAddGame = (newGame: Game) =>
+    setGames((prev) => [newGame, ...prev]);
 
   const filtered = useMemo(() => {
-    if (selectedYear === null) return MOCK_GAMES;
-    return MOCK_GAMES.filter((game) => game.year === selectedYear);
-  }, [selectedYear]);
+    if (selectedYear === null) return games;
+    return games.filter((game) => game.year === selectedYear);
+  }, [games, selectedYear]);
 
   return (
     <>
@@ -64,7 +68,11 @@ export default function Library({ userName }: LibraryProps) {
         </div>
       </div>
 
-      <AddGameModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <AddGameModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAddGame={handleAddGame}
+      />
     </>
   );
 }

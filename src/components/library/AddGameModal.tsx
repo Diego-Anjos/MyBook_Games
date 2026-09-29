@@ -6,20 +6,20 @@ import {
   useId,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
-import { Search } from "lucide-react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { ptBR } from "date-fns/locale";
+import { Gamepad2, Search } from "lucide-react";
+import type { Game } from "@/data/mock-games";
+import type { IgdbSearchResult } from "@/lib/igdb/types";
 
 type ModalStep = "search" | "details";
 
 type Platform = "pc" | "playstation" | "xbox" | "nintendo";
-
-type MockGame = {
-  id: string;
-  title: string;
-  year: number;
-  coverUrl: string;
-};
 
 const PLATFORMS: { id: Platform; label: string }[] = [
   { id: "pc", label: "PC" },
@@ -28,62 +28,134 @@ const PLATFORMS: { id: Platform; label: string }[] = [
   { id: "nintendo", label: "Nintendo" },
 ];
 
-const MOCK_SEARCH_RESULTS: MockGame[] = [
-  {
-    id: "mock-1",
-    title: "Crônicas do Vale Esquecido",
-    year: 2023,
-    coverUrl: "https://picsum.photos/seed/mbg-search-1/120/160",
-  },
-  {
-    id: "mock-2",
-    title: "Estação Polar: Protocolo Áureo",
-    year: 2021,
-    coverUrl: "https://picsum.photos/seed/mbg-search-2/120/160",
-  },
-  {
-    id: "mock-3",
-    title: "Navio Fantasma de Orvalho",
-    year: 2019,
-    coverUrl: "https://picsum.photos/seed/mbg-search-3/120/160",
-  },
-  {
-    id: "mock-4",
-    title: "Arquivos da Biblioteca Infinita",
-    year: 2024,
-    coverUrl: "https://picsum.photos/seed/mbg-search-4/120/160",
-  },
-];
+const MONTHS = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+] as const;
 
 type AddGameModalProps = {
   open: boolean;
   onClose: () => void;
-  onAdded?: (gameTitle: string) => void;
+  onAddGame: (game: Game) => void;
 };
 
-function mockSearchGames(query: string): MockGame[] {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
-  return MOCK_SEARCH_RESULTS;
+type SearchResponse = {
+  games?: IgdbSearchResult[];
+};
+
+/** IGDB entrega thumbnails; a ficha precisa da capa em resolução maior. */
+function coverImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  const normalized = url.startsWith("//") ? `https:${url}` : url;
+  return normalized
+    .replaceAll("t_thumb", "t_cover_big")
+    .replaceAll("t_cover_small", "t_cover_big");
+}
+
+function releaseYear(game: IgdbSearchResult): number | null {
+  if (typeof game.firstReleaseYear === "number") return game.firstReleaseYear;
+  return null;
+}
+
+function developerName(game: IgdbSearchResult): string | null {
+  const studio = game.developer?.trim();
+  return studio || null;
+}
+
+function genreList(game: IgdbSearchResult): string[] {
+  return [...new Set(game.genres.map((name) => name.trim()).filter(Boolean))];
+}
+
+function splitDateTime(value: Date | null): { date: string; time: string } | null {
+  if (!value || Number.isNaN(value.getTime())) return null;
+
+  const day = String(value.getDate()).padStart(2, "0");
+  const month = MONTHS[value.getMonth()];
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+
+  return {
+    date: `${day} ${month} ${value.getFullYear()}`,
+    time: `${hours}:${minutes}`,
+  };
+}
+
+function hoursBetween(start: Date | null, end: Date | null): number {
+  if (!start || !end) return 0;
+  const started = start.getTime();
+  const ended = end.getTime();
+  if (Number.isNaN(started) || Number.isNaN(ended) || ended < started) return 0;
+  return Math.round((ended - started) / 3_600_000);
+}
+
+const dateFieldClassName = `
+  w-full bg-transparent py-2 font-body text-sm text-book-paper
+  outline-none border-0 border-b border-book-gold/55
+  focus:border-book-gold
+`;
+
+/** O calendário sai do drawer (overflow + transform) e fica acima do modal. */
+function CalendarPopper({ children }: { children?: ReactNode }) {
+  if (typeof document === "undefined") return <>{children}</>;
+  return createPortal(children, document.body);
+}
+
+function GameCover({
+  url,
+  frameClassName,
+  iconClassName,
+  sizes,
+}: {
+  url: string | null;
+  frameClassName: string;
+  iconClassName: string;
+  sizes: string;
+}) {
+  const src = coverImageUrl(url);
+
+  return (
+    <div className={frameClassName}>
+      {src ? (
+        <Image src={src} alt="" fill sizes={sizes} className="object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-book-blue-light">
+          <Gamepad2 className={iconClassName} strokeWidth={1.75} aria-hidden />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AddGameModal({
   open,
   onClose,
-  onAdded,
+  onAddGame,
 }: AddGameModalProps) {
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<ModalStep>("search");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<MockGame[]>([]);
+  const [results, setResults] = useState<IgdbSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedGame, setSelectedGame] = useState<MockGame | null>(null);
+  const [selectedGame, setSelectedGame] = useState<IgdbSearchResult | null>(
+    null,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [startedAt, setStartedAt] = useState("");
-  const [endedAt, setEndedAt] = useState("");
+  const [startedAt, setStartedAt] = useState<Date | null>(null);
+  const [endedAt, setEndedAt] = useState<Date | null>(null);
   const [platform, setPlatform] = useState<Platform>("pc");
   const [rating, setRating] = useState("8");
   const [narrative, setNarrative] = useState("");
@@ -95,8 +167,8 @@ export default function AddGameModal({
     setIsLoading(false);
     setSelectedGame(null);
     setIsSubmitting(false);
-    setStartedAt("");
-    setEndedAt("");
+    setStartedAt(null);
+    setEndedAt(null);
     setPlatform("pc");
     setRating("8");
     setNarrative("");
@@ -132,22 +204,48 @@ export default function AddGameModal({
     if (!open || step !== "search") return;
 
     const trimmed = query.trim();
-    if (!trimmed) {
+    if (trimmed.length < 2) {
       setResults([]);
       setIsLoading(false);
       return;
     }
 
+    const controller = new AbortController();
     setIsLoading(true);
+
     const handle = window.setTimeout(() => {
-      setResults(mockSearchGames(trimmed));
-      setIsLoading(false);
+      void (async () => {
+        try {
+          const response = await fetch(
+            `/api/games/search?q=${encodeURIComponent(trimmed)}`,
+            { signal: controller.signal },
+          );
+
+          if (!response.ok) {
+            setResults([]);
+            return;
+          }
+
+          const data = (await response.json()) as SearchResponse;
+          if (controller.signal.aborted) return;
+
+          setResults(Array.isArray(data.games) ? data.games : []);
+        } catch {
+          if (controller.signal.aborted) return;
+          setResults([]);
+        } finally {
+          if (!controller.signal.aborted) setIsLoading(false);
+        }
+      })();
     }, 450);
 
-    return () => window.clearTimeout(handle);
+    return () => {
+      window.clearTimeout(handle);
+      controller.abort();
+    };
   }, [query, open, step]);
 
-  function handleSelectGame(game: MockGame) {
+  function handleSelectGame(game: IgdbSearchResult) {
     setSelectedGame(game);
     setStep("details");
   }
@@ -162,10 +260,52 @@ export default function AddGameModal({
     e.preventDefault();
     if (!selectedGame || isSubmitting) return;
 
+    const started = splitDateTime(startedAt);
+    const ended = splitDateTime(endedAt);
+    const finished = ended != null;
+    const platformLabel =
+      PLATFORMS.find((item) => item.id === platform)?.label ?? "PC";
+    const parsedRating = Number.parseFloat(rating);
+    const safeRating = Number.isFinite(parsedRating)
+      ? Math.min(10, Math.max(0, parsedRating))
+      : 0;
+    const diaryYear = startedAt
+      ? startedAt.getFullYear()
+      : new Date().getFullYear();
+
+    const genres = genreList(selectedGame);
+    const developer = developerName(selectedGame) ?? "";
+    const publisher = selectedGame.publisher?.trim() ?? "";
+
+    const newGame: Game = {
+      id: Date.now().toString(),
+      title: selectedGame.name,
+      coverUrl:
+        coverImageUrl(selectedGame.coverUrl) ??
+        `https://picsum.photos/seed/mbg-${selectedGame.id}/400`,
+      startedAt: started?.date ?? "—",
+      startTime: started?.time ?? "—",
+      completedAt: finished ? ended.date : null,
+      endTime: finished ? ended.time : null,
+      playtimeHours: finished ? hoursBetween(startedAt, endedAt) : 0,
+      year: releaseYear(selectedGame) ?? diaryYear,
+      zerado: finished,
+      description: narrative.trim(),
+      synopsis: selectedGame.summary?.trim() ?? "",
+      developer,
+      publisher,
+      platform: platformLabel,
+      genre: genres.join(", ") || "—",
+      genres,
+      fullReleaseDate: selectedGame.fullReleaseDate?.trim() ?? "",
+      rating: safeRating,
+    };
+
+    onAddGame(newGame);
     setIsSubmitting(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
-    onAdded?.(selectedGame.title);
-    setIsSubmitting(false);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    resetAll();
     onClose();
   }
 
@@ -246,7 +386,7 @@ export default function AddGameModal({
                 />
               </div>
               <p className="mt-2 font-body text-xs text-book-gold/45">
-                Digite para consultar os arquivos (busca temporária).
+                Digite para consultar os arquivos.
               </p>
             </div>
 
@@ -257,7 +397,7 @@ export default function AddGameModal({
                 </p>
               ) : null}
 
-              {!isLoading && query.trim() && results.length === 0 ? (
+              {!isLoading && query.trim().length >= 2 && results.length === 0 ? (
                 <p className="py-8 text-center font-body text-sm text-book-gold/45">
                   Nenhum jogo encontrado.
                 </p>
@@ -265,45 +405,47 @@ export default function AddGameModal({
 
               {!isLoading && results.length > 0 ? (
                 <ul className="space-y-2.5">
-                  {results.map((game) => (
-                    <li key={game.id}>
-                      <div
-                        className="
-                          flex items-center gap-3 rounded-sm
-                          border border-book-gold/20 bg-book-blue-light
-                          px-3 py-2.5
-                        "
-                      >
-                        <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-sm border border-book-gold/30 bg-book-blue">
-                          <Image
-                            src={game.coverUrl}
-                            alt=""
-                            fill
-                            sizes="44px"
-                            className="object-cover"
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-display text-sm leading-snug text-book-paper">
-                            {game.title}
-                          </p>
-                          <p className="mt-0.5 font-body text-xs text-book-gold/55">
-                            {game.year}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectGame(game)}
+                  {results.map((game) => {
+                    const year = releaseYear(game);
+                    return (
+                      <li key={game.id}>
+                        <div
                           className="
-                            shrink-0 font-body text-sm text-book-gold
-                            transition hover:text-book-paper
+                            flex items-center gap-3 rounded-sm
+                            border border-book-gold/20 bg-book-blue-light
+                            px-3 py-2.5
                           "
                         >
-                          Selecionar
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                          <GameCover
+                            url={game.coverUrl}
+                            sizes="44px"
+                            iconClassName="h-5 w-5 text-book-gold/70"
+                            frameClassName="relative h-14 w-11 shrink-0 overflow-hidden rounded-sm border border-book-gold/30 bg-book-blue"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-display text-sm leading-snug text-book-paper">
+                              {game.name}
+                            </p>
+                            {year != null ? (
+                              <p className="mt-0.5 font-body text-xs text-book-gold/55">
+                                {year}
+                              </p>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectGame(game)}
+                            className="
+                              shrink-0 font-body text-sm text-book-gold
+                              transition hover:text-book-paper
+                            "
+                          >
+                            Selecionar
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : null}
             </div>
@@ -323,21 +465,20 @@ export default function AddGameModal({
               </button>
 
               <div className="mt-4 flex items-center gap-3">
-                <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-sm border border-book-gold/40 bg-book-blue-light">
-                  <Image
-                    src={selectedGame.coverUrl}
-                    alt=""
-                    fill
-                    sizes="48px"
-                    className="object-cover"
-                  />
-                </div>
+                <GameCover
+                  url={selectedGame.coverUrl}
+                  sizes="48px"
+                  iconClassName="h-5 w-5 text-book-gold/70"
+                  frameClassName="relative h-16 w-12 shrink-0 overflow-hidden rounded-sm border border-book-gold/40 bg-book-blue-light"
+                />
                 <div className="min-w-0">
                   <p className="font-display text-lg leading-snug tracking-wide text-book-gold">
-                    {selectedGame.title}
+                    {selectedGame.name}
                   </p>
                   <p className="mt-0.5 font-body text-xs text-book-paper/60">
-                    {selectedGame.year}
+                    {[releaseYear(selectedGame), developerName(selectedGame)]
+                      .filter((part) => part != null && part !== "")
+                      .join(" · ")}
                   </p>
                 </div>
               </div>
@@ -349,33 +490,35 @@ export default function AddGameModal({
                   <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
                     Data e Hora de Início
                   </span>
-                  <input
-                    type="datetime-local"
-                    value={startedAt}
-                    onChange={(e) => setStartedAt(e.target.value)}
+                  <DatePicker
+                    selected={startedAt}
+                    onChange={(date) => setStartedAt(date)}
+                    showTimeSelect
+                    timeFormat="HH:mm"
+                    timeCaption="Hora"
+                    dateFormat="dd/MM/yyyy HH:mm"
+                    locale={ptBR}
                     required
-                    className="
-                      bg-transparent py-2 font-body text-sm text-book-paper
-                      outline-none border-0 border-b border-book-gold/55
-                      focus:border-book-gold
-                      [color-scheme:dark]
-                    "
+                    wrapperClassName="w-full"
+                    popperContainer={CalendarPopper}
+                    className={dateFieldClassName}
                   />
                 </label>
                 <label className="flex flex-col gap-1.5">
                   <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
                     Data e Hora de Fim
                   </span>
-                  <input
-                    type="datetime-local"
-                    value={endedAt}
-                    onChange={(e) => setEndedAt(e.target.value)}
-                    className="
-                      bg-transparent py-2 font-body text-sm text-book-paper
-                      outline-none border-0 border-b border-book-gold/55
-                      focus:border-book-gold
-                      [color-scheme:dark]
-                    "
+                  <DatePicker
+                    selected={endedAt}
+                    onChange={(date) => setEndedAt(date)}
+                    showTimeSelect
+                    timeFormat="HH:mm"
+                    timeCaption="Hora"
+                    dateFormat="dd/MM/yyyy HH:mm"
+                    locale={ptBR}
+                    wrapperClassName="w-full"
+                    popperContainer={CalendarPopper}
+                    className={dateFieldClassName}
                   />
                 </label>
               </div>
@@ -468,7 +611,7 @@ export default function AddGameModal({
                   disabled:cursor-wait disabled:opacity-70
                 "
               >
-                {isSubmitting ? "Registrando…" : "Registrar no Livro"}
+                {isSubmitting ? "Salvando..." : "Registrar no Livro"}
               </button>
             </div>
           </form>

@@ -65,36 +65,32 @@ export default function GameCard({ game }: GameCardProps) {
         </div>
       ) : null}
 
-      <div className="relative z-10 flex h-full min-h-0 flex-col gap-2.5 p-3 sm:gap-3 sm:p-4">
-        {/* Cabeçalho */}
-        <header className="shrink-0 text-center">
-          <div
-            aria-hidden
-            className="mx-auto mb-1.5 h-px w-12 bg-gradient-to-r from-transparent via-book-gold/50 to-transparent sm:mb-2 sm:w-16"
-          />
-          <h2 className="font-display text-base leading-snug tracking-wide text-book-gold sm:text-lg md:text-xl">
-            {game.title}
-          </h2>
-          <div
-            aria-hidden
-            className="mx-auto mt-1.5 h-px w-12 bg-gradient-to-r from-transparent via-book-gold/50 to-transparent sm:mt-2 sm:w-16"
-          />
-        </header>
+      <div className="relative z-10 flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto hide-scrollbar p-3 sm:gap-3 sm:p-4">
+        <div className="grid shrink-0 grid-cols-[1fr_2fr] gap-6 mb-6">
+          <div className="relative aspect-[3/4] w-full overflow-hidden rounded-sm border border-book-gold/40 bg-book-blue-light">
+            <Image
+              src={game.coverUrl}
+              alt={`Capa de ${game.title}`}
+              fill
+              sizes="180px"
+              className="h-full w-full object-cover object-center rounded-sm"
+            />
+          </div>
 
-        {/* Capa em moldura dourada */}
-        <div className="relative mx-auto aspect-[3/2] w-full max-h-[28%] shrink-0 overflow-hidden border border-book-gold/55 shadow-[inset_0_0_0_1px_rgba(201,168,76,0.2)] sm:max-h-[30%]">
-          <Image
-            src={game.coverUrl}
-            alt={`Capa de ${game.title}`}
-            fill
-            sizes="(max-width: 640px) 90vw, 420px"
-            className="object-cover"
-            priority={false}
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-1 border border-book-gold/25"
-          />
+          <div className="flex min-w-0 flex-col">
+            <h2 className="font-display text-2xl leading-tight text-book-gold">
+              {game.title}
+            </h2>
+            <p className="mt-2 font-display text-[0.65rem] tracking-[0.2em] text-book-gold/55 uppercase">
+              Estúdio
+            </p>
+            <p className="font-display text-base tracking-wide text-book-gold">
+              {game.developer}
+            </p>
+            <p className="mt-3 text-sm font-body leading-relaxed text-book-paper/80 line-clamp-5">
+              {game.synopsis.trim() || "Sinopse indisponível."}
+            </p>
+          </div>
         </div>
 
         {/* Ficha técnica */}
@@ -121,34 +117,52 @@ export default function GameCard({ game }: GameCardProps) {
           </div>
         </section>
 
-        {/* Extra + Nota */}
-        <div className="flex shrink-0 items-stretch gap-2.5 sm:gap-3">
+        {/* Ficha técnica estilo Steam + Nota */}
+        <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
           <section
-            aria-label="Informações extras"
-            className="
-              flex min-w-0 flex-1 flex-col justify-center gap-1
-              border border-book-gold/30 px-2.5 py-2
-              sm:gap-1.5 sm:px-3 sm:py-2.5
-            "
+            aria-label="Ficha do jogo"
+            className="min-w-0 flex-1 border border-book-gold/30 p-4"
           >
-            <p className="flex items-baseline gap-2 font-body text-[0.7rem] text-book-paper/80 sm:text-xs">
-              <span className="shrink-0 font-display text-[0.55rem] tracking-[0.14em] text-book-gold/55 uppercase">
-                Ano
-              </span>
-              <span className="truncate">{game.year}</span>
-            </p>
-            <p className="flex items-baseline gap-2 font-body text-[0.7rem] text-book-paper/80 sm:text-xs">
-              <span className="shrink-0 font-display text-[0.55rem] tracking-[0.14em] text-book-gold/55 uppercase">
-                Devs
-              </span>
-              <span className="truncate">{game.developer}</span>
-            </p>
-            <p className="flex items-baseline gap-2 font-body text-[0.7rem] text-book-paper/80 sm:text-xs">
-              <span className="shrink-0 font-display text-[0.55rem] tracking-[0.14em] text-book-gold/55 uppercase">
-                Género
-              </span>
-              <span className="truncate">{game.genre}</span>
-            </p>
+            <div className="flex flex-col gap-2 text-sm">
+              <p>
+                <span className="mr-2 font-display tracking-wider text-book-gold uppercase">
+                  Título:
+                </span>
+                <span className="text-book-paper/90">{game.title}</span>
+              </p>
+              <p>
+                <span className="mr-2 font-display tracking-wider text-book-gold uppercase">
+                  Gênero:
+                </span>
+                <span className="text-book-paper/90">
+                  {game.genres.join(", ") || "Desconhecido"}
+                </span>
+              </p>
+              <p>
+                <span className="mr-2 font-display tracking-wider text-book-gold uppercase">
+                  Desenvolvedor:
+                </span>
+                <span className="text-book-paper/90">
+                  {game.developer || "Desconhecido"}
+                </span>
+              </p>
+              <p>
+                <span className="mr-2 font-display tracking-wider text-book-gold uppercase">
+                  Distribuidora:
+                </span>
+                <span className="text-book-paper/90">
+                  {game.publisher || "Desconhecido"}
+                </span>
+              </p>
+              <p>
+                <span className="mr-2 font-display tracking-wider text-book-gold uppercase">
+                  Lançamento:
+                </span>
+                <span className="text-book-paper/90">
+                  {game.fullReleaseDate || "Desconhecido"}
+                </span>
+              </p>
+            </div>
           </section>
 
           <div

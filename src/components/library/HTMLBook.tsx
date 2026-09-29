@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import HTMLFlipBook from "react-pageflip";
+import { ArrowUpRight, Feather, Gamepad2 } from "lucide-react";
 import GameCard from "@/components/library/GameCard";
 import {
   ChevronLeftIcon,
@@ -51,6 +52,40 @@ type FlipPageProps = {
   total: number;
 };
 
+function EmptyPrefacePage() {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center border border-book-gold/30 p-8 text-center">
+      <Feather className="mb-6 h-12 w-12 text-book-gold opacity-80" />
+      <h2 className="mb-4 font-display text-3xl text-book-gold">
+        O Diário em Branco
+      </h2>
+      <p className="max-w-sm font-body leading-relaxed text-book-paper/70">
+        Todas as grandes jornadas começam com uma página em branco. Este é o
+        seu espaço para eternizar as memórias das suas melhores aventuras.
+      </p>
+    </div>
+  );
+}
+
+function EmptyInstructionsPage() {
+  return (
+    <div className="relative flex h-full w-full flex-col items-center justify-center border border-book-gold/30 p-8 text-center">
+      <div className="absolute top-8 right-8 animate-bounce text-book-gold/50">
+        <ArrowUpRight className="h-8 w-8" />
+      </div>
+      <Gamepad2 className="mb-6 h-12 w-12 text-book-gold opacity-80" />
+      <h3 className="mb-4 font-display text-2xl text-book-gold">
+        Comece a Escrever
+      </h3>
+      <p className="max-w-sm font-body leading-relaxed text-book-paper/70">
+        Para registrar sua primeira memória, clique em{" "}
+        <span className="text-book-gold">+ Adicionar Novo Jogo</span> no menu
+        superior.
+      </p>
+    </div>
+  );
+}
+
 const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
   function FlipPage({ children, number, total }, ref) {
     return (
@@ -83,9 +118,11 @@ export default function HTMLBook({ games }: HTMLBookProps) {
   // Portrait (1 página): não precisa de par; landscape (2): sim
   const usePortrait = isMobile;
 
+  const isEmpty = games.length === 0;
+
   const pages = useMemo(
-    () => buildPages(games, !usePortrait),
-    [games, usePortrait],
+    () => (isEmpty ? [] : buildPages(games, !usePortrait)),
+    [games, isEmpty, usePortrait],
   );
 
   const syncPageState = useCallback(() => {
@@ -126,14 +163,6 @@ export default function HTMLBook({ games }: HTMLBookProps) {
     );
   }
 
-  if (pages.length === 0) {
-    return (
-      <p className="py-12 text-center font-body text-book-gold/50">
-        Nenhum jogo encontrado para este período.
-      </p>
-    );
-  }
-
   const canGoPrev = currentPage > 0;
   const canGoNext = pageCount > 0
     ? usePortrait
@@ -147,8 +176,8 @@ export default function HTMLBook({ games }: HTMLBookProps) {
 
   const bookKey = [
     usePortrait ? "portrait" : "landscape",
-    pages.length,
-    games.map((g) => g.id).join("-"),
+    isEmpty ? "empty" : pages.length,
+    isEmpty ? "preface" : games.map((g) => g.id).join("-"),
   ].join("|");
 
   const pageLabel = usePortrait
@@ -191,21 +220,32 @@ export default function HTMLBook({ games }: HTMLBookProps) {
           onFlip={handleFlip}
           onInit={handleInit}
         >
-          {pages.map((game, index) => (
-            <FlipPage
-              key={game ? `page-${game.id}` : `blank-${index}`}
-              number={index + 1}
-              total={pages.length}
-            >
-              {game ? (
-                <GameCard game={game} />
-              ) : (
-                <p className="flex h-full items-center justify-center font-body text-sm text-book-gold/40 italic">
-                  Página em branco
-                </p>
-              )}
-            </FlipPage>
-          ))}
+          {isEmpty ? (
+            [
+              <FlipPage key="preface" number={1} total={2}>
+                <EmptyPrefacePage />
+              </FlipPage>,
+              <FlipPage key="instructions" number={2} total={2}>
+                <EmptyInstructionsPage />
+              </FlipPage>,
+            ]
+          ) : (
+            pages.map((game, index) => (
+              <FlipPage
+                key={game ? `page-${game.id}` : `blank-${index}`}
+                number={index + 1}
+                total={pages.length}
+              >
+                {game ? (
+                  <GameCard game={game} />
+                ) : (
+                  <p className="flex h-full items-center justify-center font-body text-sm text-book-gold/40 italic">
+                    Página em branco
+                  </p>
+                )}
+              </FlipPage>
+            ))
+          )}
         </FlipBook>
       </div>
 
