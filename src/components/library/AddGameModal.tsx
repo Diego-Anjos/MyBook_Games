@@ -10,12 +10,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { ptBR } from "date-fns/locale";
 import { Gamepad2, PenTool, Search } from "lucide-react";
 import type { Game } from "@/data/mock-games";
-import type { GameInsert, GameRow, GameUpdate } from "@/lib/database";
+import type { GameInsert, GameUpdate } from "@/lib/database";
 import { mapGameRow } from "@/lib/games";
 import type { IgdbSearchResult } from "@/lib/igdb/types";
 import { supabase } from "@/lib/supabase";
@@ -82,14 +83,6 @@ function genreList(game: IgdbSearchResult): string[] {
   return [...new Set(game.genres.map((name) => name.trim()).filter(Boolean))];
 }
 
-function hoursBetween(start: Date | null, end: Date | null): number {
-  if (!start || !end) return 0;
-  const started = start.getTime();
-  const ended = end.getTime();
-  if (Number.isNaN(started) || Number.isNaN(ended) || ended < started) return 0;
-  return Math.round((ended - started) / 3_600_000);
-}
-
 function platformFromLabel(label: string): Platform {
   const match = PLATFORMS.find(
     (item) => item.label.toLowerCase() === label.trim().toLowerCase(),
@@ -132,7 +125,7 @@ const dateFieldClassName = `
   focus:border-book-gold
 `;
 
-/** O calendário sai do drawer (overflow + transform) e fica acima do modal. */
+/** O calendário sai do modal (overflow) e fica acima da caixa. */
 function CalendarPopper({ children }: { children?: ReactNode }) {
   if (typeof document === "undefined") return <>{children}</>;
   return createPortal(children, document.body);
@@ -170,6 +163,7 @@ export default function AddGameModal({
   onAddGame,
   editingGame = null,
 }: AddGameModalProps) {
+  const router = useRouter();
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -336,12 +330,7 @@ export default function AddGameModal({
       ? Math.min(10, Math.max(0, parsedRating))
       : 0;
 
-    const calculatedPlaytime = finished ? hoursBetween(startedAt, endedAt) : 0;
-    const parsedManualPlaytime = Math.max(
-      0,
-      Math.round(Number(playtime.replace(/[^\d.]/g, "")) || 0),
-    );
-    const safePlaytime = calculatedPlaytime > 0 ? calculatedPlaytime : parsedManualPlaytime;
+    const safePlaytime = Number(playtime) || 0;
 
     const sessionFields: GameUpdate = {
       start_time: startedAt ? startedAt.toISOString() : null,
@@ -356,109 +345,100 @@ export default function AddGameModal({
     setFormError(null);
     setIsSubmitting(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
       setIsSubmitting(false);
-      setFormError("A sessão expirou. Entre novamente na biblioteca.");
+      alert("Sessão expirada. Faça login novamente.");
       return;
     }
 
-    let saved: GameRow | null = null;
-    let saveError: string | null = null;
-
     if (editingGame) {
-      console.log("[AddGameModal] UPDATE payload:", sessionFields);
-
       const { data, error } = await supabase
         .from("games")
         .update(sessionFields)
         .eq("id", editingGame.id)
-        .eq("user_id", user.id)
+        .eq("user_id", authData.user.id)
         .select("*")
         .single();
 
       if (error) {
-        console.error(
-          "[AddGameModal] Erro Supabase (UPDATE) —",
-          "message:", error.message,
-          "| details:", error.details,
-          "| hint:", error.hint,
-          "| code:", error.code,
-        );
+        console.error("Erro detalhado do Supabase:", error);
+        alert("Erro ao salvar no banco de dados: " + error.message);
+        setIsSubmitting(false);
+        return;
       }
 
-      saved = (data as GameRow | null) ?? null;
-      saveError = error
-        ? `${error.message}${error.details ? ` (${error.details})` : ""}${error.hint ? ` — ${error.hint}` : ""}`
-        : null;
-    } else if (selectedGame) {
-      const genres = genreList(selectedGame);
-      const payload: GameInsert = {
-        user_id: user.id,
-        igdb_id: selectedGame.id,
-        title: selectedGame.name,
-        cover_url:
-          coverImageUrl(selectedGame.coverUrl) ??
-          `https://picsum.photos/seed/mbg-${selectedGame.id}/400`,
-        developer: developerName(selectedGame),
-        publisher: selectedGame.publisher?.trim() || null,
-        release_date: selectedGame.firstReleaseDate,
-        genres,
-        synopsis: selectedGame.summary?.trim() || null,
-        ...sessionFields,
-      };
-
-      console.log("[AddGameModal] INSERT payload:", payload);
-
-      const { data, error } = await supabase
-        .from("games")
-        .insert(payload)
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error(
-          "[AddGameModal] Erro Supabase (INSERT) —",
-          "message:", error.message,
-          "| details:", error.details,
-          "| hint:", error.hint,
-          "| code:", error.code,
-        );
+      if (!data) {
+        console.error("Erro detalhado do Supabase: update não devolveu o registro.");
+        alert("Erro ao salvar no banco de dados: o registro não foi confirmado.");
+        setIsSubmitting(false);
+        return;
       }
 
-      saved = (data as GameRow | null) ?? null;
-      saveError = error
-        ? `${error.message}${error.details ? ` (${error.details})` : ""}${error.hint ? ` — ${error.hint}` : ""}`
-        : null;
-    } else {
-      setIsSubmitting(false);
-      return;
-    }
+      // Sucesso ao salvar!
+      router.refresh();
 
-    if (saveError || !saved) {
-      setIsSubmitting(false);
-      const lower = (saveError ?? "").toLowerCase();
-      if (lower.includes("duplicate") || lower.includes("unique")) {
-        setFormError("Este jogo já tem uma página no seu diário.");
-      } else {
-        setFormError(`Não foi possível guardar esta página. ${saveError ?? ""}`.trim());
-      }
-      return;
-    }
-
-    onAddGame(mapGameRow(saved));
-
-    if (editingGame) {
-      // Na edição exibe o modal de sucesso; o onClose é chamado pelo botão do modal.
+      onAddGame(mapGameRow(data));
       setIsSubmitting(false);
       setShowSuccessModal(true);
-    } else {
-      resetAll();
-      onClose();
+      return;
     }
+
+    if (!selectedGame) {
+      setIsSubmitting(false);
+      return;
+    }
+
+    const genres = genreList(selectedGame);
+    const payload: GameInsert = {
+      user_id: authData.user.id,
+      igdb_id: selectedGame.id,
+      title: selectedGame.name,
+      cover_url:
+        coverImageUrl(selectedGame.coverUrl) ??
+        `https://picsum.photos/seed/mbg-${selectedGame.id}/400`,
+      developer: developerName(selectedGame),
+      publisher: selectedGame.publisher?.trim() || null,
+      release_date: selectedGame.firstReleaseDate,
+      genres,
+      synopsis: selectedGame.summary?.trim() || null,
+      ...sessionFields,
+    };
+
+    console.log("========== INICIANDO SALVAMENTO ==========");
+    console.log("Payload pronto para envio:", payload);
+
+    const response = await supabase.from("games").insert([payload]).select();
+    console.log("========== RESPOSTA DO SUPABASE ==========");
+    console.log("Status da Resposta:", response);
+
+    if (response.error) {
+      console.error("ERRO CRÍTICO AO SALVAR:", response.error);
+      alert(
+        "Erro ao salvar o jogo. Veja o console (F12). Mensagem: " +
+          response.error.message,
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    const saved = response.data?.[0];
+    if (!saved) {
+      console.error(
+        "Erro detalhado do Supabase: insert não devolveu o registro.",
+        response.data,
+      );
+      alert("Erro ao salvar no banco de dados: o registro não foi confirmado.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Sucesso ao salvar!
+    router.refresh();
+
+    onAddGame(mapGameRow(saved));
+    resetAll();
+    onClose();
   }
 
   if (!open) return null;
@@ -475,43 +455,31 @@ export default function AddGameModal({
     .join(" · ");
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <>
+    <div className="animate-in fade-in fixed inset-0 z-[9950] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm duration-300 sm:p-6">
       <button
         type="button"
         aria-label="Fechar"
-        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+        className="absolute inset-0"
         onClick={onClose}
       />
 
-      <aside
+      <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="
-          relative flex h-full w-full max-w-md flex-col
-          border-l border-book-gold/40 bg-book-blue text-book-gold
-          shadow-[-20px_0_60px_rgba(0,0,0,0.55)]
-          animate-drawer-in
-        "
+        className="animate-in zoom-in-95 relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-sm border-2 border-book-gold/40 bg-book-blue text-book-gold shadow-2xl duration-300"
       >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-3 border border-book-gold/25"
-        />
-
-        <header className="relative z-10 flex items-start justify-between gap-4 border-b border-book-gold/25 px-6 py-5">
+        <div className="flex items-center justify-between border-b border-book-gold/20 bg-book-blue-light/50 p-6">
           <div>
-            <p className="font-display text-[0.65rem] tracking-[0.3em] text-book-gold/55 uppercase">
+            <p className="mb-1 text-[10px] tracking-widest text-book-gold uppercase">
               {step === "search" && !isEditing
-                ? "Nova página"
+                ? "Nova Página"
                 : isEditing
                   ? "Revisão"
                   : "Diário de sessão"}
             </p>
-            <h2
-              id={titleId}
-              className="mt-1 font-display text-2xl tracking-wide"
-            >
+            <h2 id={titleId} className="font-display text-2xl text-book-gold">
               {step === "search" && !isEditing
                 ? "Adicionar Jogo"
                 : isEditing
@@ -522,11 +490,13 @@ export default function AddGameModal({
           <button
             type="button"
             onClick={onClose}
-            className="font-body text-sm text-book-gold/60 transition hover:text-book-gold"
+            className="text-sm tracking-widest text-book-paper/60 uppercase transition-colors hover:text-book-gold"
           >
             Fechar
           </button>
-        </header>
+        </div>
+
+        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
 
         {step === "search" && !isEditing ? (
           <>
@@ -848,9 +818,11 @@ export default function AddGameModal({
             </div>
           </form>
         ) : null}
-      </aside>
+        </div>
+      </div>
+    </div>
 
-      {showSuccessModal && (
+    {showSuccessModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-300">
           <div className="bg-book-blue border-2 border-book-gold/50 p-8 max-w-sm w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
             <div className="absolute top-2 left-2 border-t border-l border-book-gold/50 w-4 h-4" />
@@ -882,6 +854,6 @@ export default function AddGameModal({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

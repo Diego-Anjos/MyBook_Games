@@ -11,8 +11,9 @@ import {
   type ReactNode,
 } from "react";
 import HTMLFlipBook from "react-pageflip";
-import { ArrowUpRight, Feather, Gamepad2 } from "lucide-react";
+import { ArrowUpRight, Eraser, Feather, Gamepad2 } from "lucide-react";
 import GameCard from "@/components/library/GameCard";
+import { supabase } from "@/lib/supabase";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -24,6 +25,7 @@ type FlipBookHandle = {
   pageFlip: () => {
     flipNext: () => void;
     flipPrev: () => void;
+    flip: (page: number) => void;
     getCurrentPageIndex: () => number;
     getPageCount: () => number;
   } | null;
@@ -32,6 +34,9 @@ type FlipBookHandle = {
 type HTMLBookProps = {
   games: Game[];
   onEdit: (game: Game) => void;
+  onRefresh: () => Promise<void> | void;
+  focusGameId?: string | null;
+  onFocusHandled?: () => void;
 };
 
 /**
@@ -112,10 +117,20 @@ const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
   },
 );
 
-export default function HTMLBook({ games, onEdit }: HTMLBookProps) {
+export default function HTMLBook({
+  games,
+  onEdit,
+  onRefresh,
+  focusGameId = null,
+  onFocusHandled,
+}: HTMLBookProps) {
   const bookRef = useRef<FlipBookHandle>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageCount, setPageCount] = useState(0);
+  const [gameToDelete, setGameToDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteSuccess, setIsDeleteSuccess] = useState(false);
   const { isMobile, ready, height } = useViewport();
 
   // Portrait (1 página): não precisa de par; landscape (2): sim
@@ -149,6 +164,28 @@ export default function HTMLBook({ games, onEdit }: HTMLBookProps) {
     syncPageState();
   }, [syncPageState]);
 
+  useEffect(() => {
+    if (!focusGameId) return;
+    const index = pages.findIndex((page) => page?.id === focusGameId);
+    if (index < 0) return;
+
+    const reveal = () => {
+      const flip = bookRef.current?.pageFlip?.();
+      if (!flip || index >= flip.getPageCount()) return false;
+      const target = usePortrait ? index : index - (index % 2);
+      flip.flip(target);
+      onFocusHandled?.();
+      return true;
+    };
+
+    if (reveal()) return;
+
+    const id = window.setTimeout(() => {
+      reveal();
+    }, 220);
+    return () => window.clearTimeout(id);
+  }, [focusGameId, pages, usePortrait, onFocusHandled]);
+
   function flipPrev() {
     bookRef.current?.pageFlip()?.flipPrev();
   }
@@ -156,6 +193,40 @@ export default function HTMLBook({ games, onEdit }: HTMLBookProps) {
   function flipNext() {
     bookRef.current?.pageFlip()?.flipNext();
   }
+
+  function requestDelete(gameId: string) {
+    setDeleteError(null);
+    setIsDeleteSuccess(false);
+    setGameToDelete(gameId);
+  }
+
+  const closeDeleteModal = () => {
+    setGameToDelete(null);
+    setIsDeleteSuccess(false);
+    setIsDeleting(false);
+    void onRefresh();
+  };
+
+  const handleDelete = async () => {
+    if (!gameToDelete || isDeleting) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    const { error } = await supabase
+      .from("games")
+      .delete()
+      .eq("id", gameToDelete);
+
+    if (error) {
+      console.error("Erro ao apagar:", error);
+      setDeleteError("Não foi possível arrancar esta página.");
+      setIsDeleting(false);
+      return;
+    }
+
+    setIsDeleteSuccess(true);
+  };
 
   // Aguarda medição do viewport para evitar flash landscape→portrait
   if (!ready) {
@@ -245,7 +316,11 @@ export default function HTMLBook({ games, onEdit }: HTMLBookProps) {
                 total={pages.length}
               >
                 {game ? (
-                  <GameCard game={game} onEdit={onEdit} />
+                  <GameCard
+                    game={game}
+                    onEdit={onEdit}
+                    onDelete={requestDelete}
+                  />
                 ) : (
                   <p className="flex h-full items-center justify-center p-6 font-body text-sm text-book-gold/40 italic md:p-8">
                     Página em branco
@@ -292,6 +367,71 @@ export default function HTMLBook({ games, onEdit }: HTMLBookProps) {
           <ChevronRightIcon className="h-5 w-5" />
         </button>
       </div>
+
+      {gameToDelete && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in duration-300">
+          <div className="bg-book-blue border-2 border-red-900/50 p-8 max-w-sm w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
+            <div className="absolute top-2 left-2 border-t border-l border-red-900/50 w-4 h-4" />
+            <div className="absolute top-2 right-2 border-t border-r border-red-900/50 w-4 h-4" />
+            <div className="absolute bottom-2 left-2 border-b border-l border-red-900/50 w-4 h-4" />
+            <div className="absolute bottom-2 right-2 border-b border-r border-red-900/50 w-4 h-4" />
+
+            {!isDeleteSuccess ? (
+              <div className="animate-in fade-in flex w-full flex-col items-center duration-300">
+                <Eraser className="mb-5 h-10 w-10 text-red-500/80" />
+                <h2 className="mb-3 font-display text-xl text-red-400">
+                  Arrancar Página?
+                </h2>
+                <p className="mb-8 font-body text-sm leading-relaxed text-book-paper/80">
+                  Tem a certeza de que deseja apagar permanentemente estas
+                  memórias do seu diário? Esta ação não pode ser desfeita.
+                </p>
+                {deleteError ? (
+                  <p role="alert" className="mb-4 font-body text-sm text-red-300">
+                    {deleteError}
+                  </p>
+                ) : null}
+                <div className="flex w-full gap-4">
+                  <button
+                    type="button"
+                    onClick={closeDeleteModal}
+                    disabled={isDeleting}
+                    className="flex-1 border border-book-gold/30 bg-transparent py-2 font-display text-xs tracking-widest text-book-gold uppercase transition-colors hover:bg-book-gold/10 disabled:opacity-50"
+                  >
+                    Manter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="flex-1 border border-red-900/50 bg-red-900/40 py-2 font-display text-xs tracking-widest text-red-400 uppercase transition-colors hover:bg-red-900/60 hover:text-red-300 disabled:opacity-50"
+                  >
+                    {isDeleting ? "Apagando..." : "Apagar"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="animate-in zoom-in-95 fade-in flex w-full flex-col items-center duration-500">
+                <Eraser className="mb-5 h-10 w-10 text-book-gold opacity-80" />
+                <h2 className="mb-3 font-display text-xl text-book-gold">
+                  Página Consumida
+                </h2>
+                <p className="mb-8 font-body text-sm leading-relaxed text-book-paper/80">
+                  O registro desta jornada foi transformado em cinzas e removido
+                  permanentemente do seu livro.
+                </p>
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  className="w-full bg-book-gold py-2 font-display text-xs tracking-widest text-book-blue uppercase transition-colors hover:bg-book-gold/90"
+                >
+                  Continuar Lendo
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -81,6 +81,8 @@ export function mapGameRow(row: GameRow): Game {
     startTime: start?.time ?? "—",
     completedAt: end?.date ?? null,
     endTime: end?.time ?? null,
+    sessionStart: row.start_time,
+    sessionEnd: row.end_time,
     playtimeHours: asNumber(row.playtime),
     year: releaseYear(row.release_date) ?? sessionYear,
     zerado: Boolean(row.is_cleared),

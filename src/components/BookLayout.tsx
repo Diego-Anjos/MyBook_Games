@@ -1,5 +1,3 @@
-import SplashScreen from "@/components/SplashScreen";
-
 /**
  * Biblioteca à Meia-Luz — fundo nítido + vinheta nas bordas.
  * O visual da capa/páginas fica a cargo dos filhos (ex.: AuthBook).
@@ -30,8 +28,6 @@ export default function BookLayout({
       />
 
       <div className="relative z-10 w-full max-w-6xl">{children}</div>
-
-      <SplashScreen />
     </div>
   );
 }

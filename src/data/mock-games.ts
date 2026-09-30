@@ -8,6 +8,10 @@ export type Game = {
   startTime: string;
   completedAt: string | null;
   endTime: string | null;
+  /** Início da sessão em ISO (`start_time` do banco). */
+  sessionStart: string | null;
+  /** Fim da sessão em ISO (`end_time` do banco). */
+  sessionEnd: string | null;
   playtimeHours: number;
   year: number;
   zerado: boolean;

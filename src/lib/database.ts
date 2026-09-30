@@ -5,9 +5,14 @@ export interface ProfileRow {
   nickname: string | null;
   birth_date: string | null;
   platform: string | null;
+  avatar_url: string | null;
+  cover_url: string | null;
 }
 
-export type ProfileInsert = ProfileRow;
+export type ProfileInsert = Omit<ProfileRow, "avatar_url" | "cover_url"> & {
+  avatar_url?: string | null;
+  cover_url?: string | null;
+};
 
 /** Linha da tabela `games`. */
 export interface GameRow {

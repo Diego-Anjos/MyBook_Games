@@ -1,14 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
-import { LogOut, User } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  Gamepad2,
+  LogOut,
+  Menu,
+  Swords,
+  Trophy,
+  User,
+  X,
+} from "lucide-react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   FeatherIcon,
 } from "@/components/icons";
 import UserProfileModal from "@/components/library/UserProfileModal";
+import type { Game } from "@/data/mock-games";
 import { supabase } from "@/lib/supabase";
 
 type LibraryHeaderProps = {
@@ -18,6 +29,8 @@ type LibraryHeaderProps = {
   onAddGame?: () => void;
   nickname?: string;
   avatarUrl?: string | null;
+  games?: Game[];
+  onOpenGame?: (game: Game) => void;
 };
 
 function CornerFiligree({ className }: { className?: string }) {
@@ -142,9 +155,78 @@ export default function LibraryHeader({
   onAddGame,
   nickname = "Escritor",
   avatarUrl = null,
+  games,
+  onOpenGame,
 }: LibraryHeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [portraitUrl, setPortraitUrl] = useState(avatarUrl ?? "");
+
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !active) return;
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (active) setPortraitUrl(data?.avatar_url || "");
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const currentYear = new Date().getFullYear();
+
+  const gamesThisYear =
+    games?.filter((game) => {
+      const date = new Date(game.sessionEnd || game.sessionStart || new Date());
+      return date.getFullYear() === currentYear;
+    }) || [];
+
+  const clearedThisYear = gamesThisYear.filter((game) => game.zerado).length;
+  const totalGamesThisYear = gamesThisYear.length;
+
+  const totalPlaytimeThisYear = gamesThisYear.reduce((acc, game) => {
+    return acc + (game.playtimeHours || 0);
+  }, 0);
+
+  const gamesByMonth = gamesThisYear.reduce<Record<number, Game[]>>(
+    (acc, game) => {
+      const date = new Date(game.sessionEnd || game.sessionStart || new Date());
+      const month = date.getMonth();
+      if (!acc[month]) acc[month] = [];
+      acc[month].push(game);
+      return acc;
+    },
+    {},
+  );
+
+  const monthNames = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
 
   const currentIndex =
     selectedYear === null ? -1 : years.indexOf(selectedYear);
@@ -176,10 +258,50 @@ export default function LibraryHeader({
         <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
           {/* Perfil + seletor de anos */}
           <div className="flex w-full min-w-0 flex-col gap-2.5 md:flex-1 md:justify-start">
-            <div className="flex w-fit items-center">
-              <button
-                type="button"
-                onClick={() => setIsProfileOpen(true)}
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="text-book-gold transition-colors hover:text-book-gold/70"
+                  title="Menu de Status"
+                  aria-label="Menu de Status"
+                  aria-expanded={isMenuOpen}
+                >
+                  <Menu className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={1.5} />
+                </button>
+
+                {isMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-[90]"
+                      onClick={() => setIsMenuOpen(false)}
+                    />
+
+                    <div className="animate-in fade-in slide-in-from-top-2 absolute top-12 left-0 z-[100] w-48 rounded-sm border border-book-gold/30 bg-book-blue py-2 shadow-2xl">
+                      <ul>
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsStatusModalOpen(true);
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-book-paper transition-colors hover:bg-book-gold/10 hover:text-book-gold"
+                          >
+                            <Trophy className="h-4 w-4" />
+                            Status do Escritor
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex w-fit items-center">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen(true)}
                 className="
                   group flex w-fit items-center gap-2.5
                   rounded-sm py-1 pr-2 transition
@@ -189,21 +311,22 @@ export default function LibraryHeader({
               >
                 <span
                   className="
-                    flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden
+                    flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden
                     rounded-full border border-book-gold bg-book-blue-light
                     transition group-hover:border-book-gold
+                    sm:h-12 sm:w-12
                   "
                 >
-                  {avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- URL local/mock
+                  {portraitUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- URL pública do Storage
                     <img
-                      src={avatarUrl}
+                      src={portraitUrl}
                       alt=""
-                      className="h-full w-full object-cover"
+                      className="h-full w-full rounded-full object-cover"
                     />
                   ) : (
                     <User
-                      className="h-4 w-4 text-book-gold/80"
+                      className="h-5 w-5 text-book-gold/80 sm:h-6 sm:w-6"
                       strokeWidth={1.5}
                     />
                   )}
@@ -221,6 +344,7 @@ export default function LibraryHeader({
               >
                 <LogOut className="h-4 w-4" strokeWidth={1.75} aria-hidden />
               </button>
+              </div>
             </div>
 
             <div className="flex w-full min-w-0 items-center gap-1 sm:gap-2">
@@ -312,6 +436,8 @@ export default function LibraryHeader({
         onClose={() => setIsProfileOpen(false)}
         initialNickname={nickname}
         initialName={nickname}
+        initialAvatarUrl={portraitUrl}
+        onAvatarChange={setPortraitUrl}
       />
 
       <LogoutModal
@@ -323,6 +449,181 @@ export default function LibraryHeader({
           });
         }}
       />
+
+      {isStatusModalOpen && (
+        <div className="animate-in fade-in fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 px-4 py-8 backdrop-blur-md duration-500 sm:px-8">
+          <div className="relative flex h-full max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-sm border-2 border-book-gold/40 bg-book-blue shadow-2xl">
+            <div className="relative flex items-center justify-between overflow-hidden border-b border-book-gold/20 bg-book-blue-light/50 p-6 sm:p-10">
+              <div className="relative z-10">
+                <h2 className="mb-1 font-display text-3xl tracking-widest text-book-gold uppercase sm:text-4xl">
+                  O Tomo das Jornadas
+                </h2>
+                <p className="font-body text-sm text-book-paper/60">
+                  Sua retrospectiva de memórias e conquistas
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStatusModalOpen(false)}
+                className="relative z-10 text-book-paper/60 transition-colors hover:text-book-gold"
+                aria-label="Fechar retrospectiva"
+              >
+                <X className="h-8 w-8" />
+              </button>
+            </div>
+
+            <div className="custom-scrollbar flex-1 overflow-y-auto p-6 font-body sm:p-10">
+              <div className="mb-12 grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div className="flex flex-col items-center justify-center border border-book-gold/20 bg-book-gold/5 p-6 text-center transition-colors hover:bg-book-gold/10">
+                  <Gamepad2 className="mb-3 h-8 w-8 text-book-gold opacity-80" />
+                  <p className="mb-1 text-[10px] tracking-widest text-book-gold uppercase">
+                    Jogados em {currentYear}
+                  </p>
+                  <p className="font-display text-4xl text-book-paper">
+                    {totalGamesThisYear}
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-center justify-center border border-book-gold/20 bg-book-gold/5 p-6 text-center shadow-[inset_0_0_20px_rgba(212,175,55,0.05)] transition-colors hover:bg-book-gold/10">
+                  <Trophy className="mb-3 h-8 w-8 text-book-gold drop-shadow-[0_0_8px_rgba(212,175,55,0.6)]" />
+                  <p className="mb-1 text-[10px] tracking-widest text-book-gold uppercase">
+                    Finais Alcançados
+                  </p>
+                  <p className="font-display text-4xl text-book-paper">
+                    {clearedThisYear}
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-center justify-center border border-book-gold/20 bg-book-gold/5 p-6 text-center transition-colors hover:bg-book-gold/10">
+                  <Clock className="mb-3 h-8 w-8 text-book-gold opacity-80" />
+                  <p className="mb-1 text-[10px] tracking-widest text-book-gold uppercase">
+                    Tempo de Jogo
+                  </p>
+                  <p className="font-display text-4xl text-book-paper">
+                    {totalPlaytimeThisYear > 0
+                      ? `${totalPlaytimeThisYear}h`
+                      : "0h"}
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-center justify-center border border-book-gold/20 bg-book-gold/5 p-6 text-center transition-colors hover:bg-book-gold/10">
+                  <Swords className="mb-3 h-8 w-8 text-book-gold opacity-80" />
+                  <p className="mb-1 text-[10px] tracking-widest text-book-gold uppercase">
+                    Em Andamento
+                  </p>
+                  <p className="font-display text-4xl text-book-paper">
+                    {totalGamesThisYear - clearedThisYear}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h3 className="mb-8 flex items-center gap-3 border-b border-book-gold/20 pb-3 font-display text-xl tracking-widest text-book-gold uppercase sm:text-2xl">
+                  <Calendar className="h-6 w-6" /> Cronologia das Jornadas
+                </h3>
+
+                <div className="relative ml-4 space-y-12 border-l-2 border-book-gold/20 pl-8 sm:ml-6 sm:pl-10">
+                  {monthNames.map((month, idx) => {
+                    const monthGames = gamesByMonth[idx];
+                    if (!monthGames || monthGames.length === 0) return null;
+
+                    return (
+                      <div
+                        key={month}
+                        className="animate-in slide-in-from-left-4 relative duration-500"
+                      >
+                        <div className="absolute top-1.5 -left-[41px] h-4 w-4 rounded-full border-2 border-book-gold bg-book-blue shadow-[0_0_10px_rgba(212,175,55,0.5)] sm:-left-[49px]" />
+
+                        <h4 className="mb-6 font-display text-2xl text-book-gold">
+                          {month}
+                        </h4>
+
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                          {monthGames.map((game) => {
+                            const start = game.sessionStart
+                              ? new Date(game.sessionStart)
+                              : new Date();
+                            const end = game.sessionEnd
+                              ? new Date(game.sessionEnd)
+                              : new Date();
+                            const diffTime = Math.abs(
+                              end.getTime() - start.getTime(),
+                            );
+                            const diffDays =
+                              Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+
+                            return (
+                              <button
+                                type="button"
+                                key={game.id}
+                                onClick={() => {
+                                  setIsStatusModalOpen(false);
+                                  onOpenGame?.(game);
+                                }}
+                                className="group flex w-full cursor-pointer gap-5 border border-book-gold/20 bg-book-gold/5 p-4 text-left transition-all duration-300 hover:-translate-y-1 hover:bg-book-gold/10 hover:shadow-[0_4px_20px_rgba(212,175,55,0.15)] sm:p-5"
+                              >
+                                <div className="relative flex h-32 w-20 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-book-gold/30 bg-black/30 sm:h-40 sm:w-28">
+                                  {game.coverUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- capa remota do IGDB
+                                    <img
+                                      src={game.coverUrl}
+                                      alt={game.title}
+                                      className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
+                                    />
+                                  ) : (
+                                    <Gamepad2 className="h-8 w-8 text-book-gold/30" />
+                                  )}
+                                  {game.zerado && (
+                                    <div className="absolute -right-6 top-2 rotate-45 bg-book-gold px-6 py-0.5 font-display text-[8px] font-bold tracking-widest text-book-blue uppercase shadow-md">
+                                      Zerado
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-col justify-center py-2">
+                                  <h5 className="mb-3 font-display text-lg leading-tight text-book-paper line-clamp-2 sm:text-xl">
+                                    {game.title}
+                                  </h5>
+                                  <div className="mt-auto flex flex-wrap gap-x-4 gap-y-2">
+                                    {game.zerado ? (
+                                      <p className="flex items-center gap-1.5 text-xs text-book-gold/80">
+                                        <Trophy className="h-3.5 w-3.5" />
+                                        Zerado em {diffDays}{" "}
+                                        {diffDays === 1 ? "dia" : "dias"}
+                                      </p>
+                                    ) : (
+                                      <p className="flex items-center gap-1.5 text-xs text-book-paper/60">
+                                        <Swords className="h-3.5 w-3.5" />
+                                        Jornada em andamento
+                                      </p>
+                                    )}
+                                    {game.playtimeHours ? (
+                                      <p className="flex items-center gap-1.5 text-xs text-book-gold/80">
+                                        <Clock className="h-3.5 w-3.5" />
+                                        {game.playtimeHours}h
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {Object.keys(gamesByMonth).length === 0 && (
+                    <p className="mt-4 text-sm text-book-paper/50 italic">
+                      Nenhuma jornada registrada neste ano ainda.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

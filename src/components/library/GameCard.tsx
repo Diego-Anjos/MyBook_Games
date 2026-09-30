@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { Pen } from "lucide-react";
+import { Eraser, Pen } from "lucide-react";
 import type { Game } from "@/data/mock-games";
 import { PlatformIcon } from "@/components/library/PlatformIcon";
 
 type GameCardProps = {
   game: Game;
   onEdit: (game: Game) => void;
+  onDelete: (gameId: string) => void;
 };
 
 function CornerOrnament({ className }: { className?: string }) {
@@ -39,7 +40,7 @@ function formatRating(rating: number): string {
   return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
 }
 
-export default function GameCard({ game, onEdit }: GameCardProps) {
+export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
   return (
     <article className="relative flex h-full w-full flex-col bg-book-blue p-6 md:p-8">
       <CornerOrnament className="top-1.5 left-1.5 border-t border-l" />
@@ -63,21 +64,38 @@ export default function GameCard({ game, onEdit }: GameCardProps) {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onEdit(game);
-        }}
-        title="Editar página"
-        aria-label="Editar página"
-        className={`absolute z-20 rounded-full p-2 text-book-gold/40 transition-all duration-300 hover:bg-book-gold/10 hover:text-book-gold ${
+      <div
+        className={`absolute z-20 flex items-center gap-3 ${
           game.zerado ? "top-1 right-20" : "top-1 right-4"
         }`}
       >
-        <Pen className="h-4 w-4" />
-      </button>
+        <button
+          type="button"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(game.id);
+          }}
+          title="Arrancar página"
+          aria-label="Arrancar página"
+          className="rounded-full p-2 text-book-gold transition-colors hover:text-red-400"
+        >
+          <Eraser className="h-4 w-4 sm:h-5 sm:w-5" />
+        </button>
+        <button
+          type="button"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit(game);
+          }}
+          title="Editar página"
+          aria-label="Editar página"
+          className="rounded-full p-2 text-book-gold/40 transition-all duration-300 hover:bg-book-gold/10 hover:text-book-gold"
+        >
+          <Pen className="h-4 w-4" />
+        </button>
+      </div>
 
       <div className="flex h-full min-h-0 flex-col">
         <div className="grid shrink-0 grid-cols-[4rem_1fr] gap-2 md:grid-cols-[1fr_2fr] md:gap-6">

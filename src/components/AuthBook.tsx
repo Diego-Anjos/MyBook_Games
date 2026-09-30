@@ -36,6 +36,7 @@ import {
   User,
 } from "lucide-react";
 import Library from "@/components/library/Library";
+import SplashScreen from "@/components/SplashScreen";
 import { PlatformIcon } from "@/components/library/PlatformIcon";
 import { ensureProfile, loadReaderName } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
@@ -646,6 +647,8 @@ export default function AuthBook() {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [entered, setEntered] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [splashDismissed, setSplashDismissed] = useState(false);
   const [userName, setUserName] = useState("Escritor");
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -716,6 +719,7 @@ export default function AuthBook() {
     };
 
     const openFromUser = (user: AuthUser) => {
+      setSplashDismissed(true);
       const nickname =
         typeof user.user_metadata?.nickname === "string"
           ? user.user_metadata.nickname.trim()
@@ -751,6 +755,7 @@ export default function AuthBook() {
       } catch (error) {
         console.error("Erro ao verificar sessão:", error);
       } finally {
+        if (active) setIsAuthLoading(false);
         revealBook();
       }
     };
@@ -764,11 +769,18 @@ export default function AuthBook() {
       revealBook();
       if (event === "INITIAL_SESSION" && session?.user) {
         openFromUser(session.user);
+        setIsAuthLoading(false);
       }
-      if (event === "SIGNED_OUT") setEntered(false);
+      if (event === "SIGNED_OUT") {
+        setEntered(false);
+        setIsAuthLoading(false);
+      }
     });
 
-    const safety = window.setTimeout(revealBook, 3000);
+    const safety = window.setTimeout(() => {
+      revealBook();
+      if (active) setIsAuthLoading(false);
+    }, 3000);
 
     return () => {
       active = false;
@@ -778,6 +790,7 @@ export default function AuthBook() {
   }, []);
 
   function enterLibrary(displayName: string) {
+    setSplashDismissed(true);
     setUserName(displayName);
     setLoginLoading(false);
     setRegisterLoading(false);
@@ -1190,6 +1203,10 @@ export default function AuthBook() {
     ],
   );
 
+  if (isAuthLoading) {
+    return <div className="min-h-screen" aria-busy="true" />;
+  }
+
   if (entered) {
     return <Library userName={userName} />;
   }
@@ -1230,6 +1247,8 @@ export default function AuthBook() {
         {bookPages}
       </StableFlipBook>
     </div>
+
+    {!splashDismissed ? <SplashScreen /> : null}
 
     <TermsModal open={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
 

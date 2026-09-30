@@ -1,13 +1,15 @@
 "use client";
 
 import {
+  ChangeEvent,
   FormEvent,
   useEffect,
   useId,
   useRef,
   useState,
 } from "react";
-import { Camera, Trash2, User, X } from "lucide-react";
+import { Camera, Image, Trash2, User, X } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type UserProfileModalProps = {
   open: boolean;
@@ -15,6 +17,9 @@ type UserProfileModalProps = {
   initialName?: string;
   initialNickname?: string;
   initialEmail?: string;
+  initialBirthDate?: string;
+  initialAvatarUrl?: string;
+  onAvatarChange?: (url: string) => void;
 };
 
 function CornerFiligree({ className }: { className?: string }) {
@@ -56,13 +61,15 @@ function ProfileField({
   value,
   onChange,
   autoComplete,
+  disabled = false,
 }: {
   id: string;
   label: string;
   type?: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   autoComplete?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -76,16 +83,23 @@ function ProfileField({
         id={id}
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={
+          onChange ? (e) => onChange(e.target.value) : undefined
+        }
         autoComplete={autoComplete}
-        className="
-          w-full bg-transparent py-2 font-body text-book-blue
-          outline-none
+        disabled={disabled}
+        className={`
+          w-full bg-transparent py-2 font-body outline-none
           border-0 border-b border-book-blue/30
           transition
-          focus:border-book-blue
           placeholder:text-book-blue/30
-        "
+          ${
+            disabled
+              ? "cursor-not-allowed text-book-blue/55"
+              : "text-book-blue focus:border-book-blue"
+          }
+          ${type === "date" ? "[color-scheme:light]" : ""}
+        `}
       />
     </div>
   );
@@ -97,28 +111,40 @@ export default function UserProfileModal({
   initialName = "",
   initialNickname = "Escritor",
   initialEmail = "",
+  initialBirthDate = "",
+  initialAvatarUrl = "",
+  onAvatarChange,
 }: UserProfileModalProps) {
   const titleId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(initialName);
   const [nickname, setNickname] = useState(initialNickname);
   const [email, setEmail] = useState(initialEmail);
+  const [birthDate, setBirthDate] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl || "");
+  const [isUploading, setIsUploading] = useState(false);
+  const [coverUrl, setCoverUrl] = useState("");
+  const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Sync when modal opens with fresh props
   useEffect(() => {
     if (!open) return;
-    setName(initialName);
-    setNickname(initialNickname);
-    setEmail(initialEmail);
-    setPassword("");
-    setConfirmPassword("");
-    setSaving(false);
-  }, [open, initialName, initialNickname, initialEmail]);
+    
+    // Atualize os estados apenas com os valores que chegam nas props
+    setName(initialName || "");
+    setNickname(initialNickname || "");
+    
+    // Se você tiver adicionado initialBirthDate ou email como props, 
+    // atualize-os aqui também (descomente se existirem):
+    // if (initialBirthDate !== undefined) setBirthDate(initialBirthDate);
+    // if (initialEmail !== undefined) setEmail(initialEmail);
+    
+  }, [open, initialName, initialNickname]); // MANTENHA EXATAMENTE ASSIM, SEM VARIÁVEIS ADICIONAIS OU CONDICIONAIS
 
   useEffect(() => {
     if (!open) return;
@@ -141,34 +167,173 @@ export default function UserProfileModal({
   }, [open, onClose, saving]);
 
   useEffect(() => {
+    if (!open) return;
+    let active = true;
+
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !active) return;
+
+      setEmail(user.email || "");
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("avatar_url, cover_url, birth_date")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!active) return;
+      setAvatarUrl(data?.avatar_url || initialAvatarUrl || "");
+      setCoverUrl(data?.cover_url || "");
+      setBirthDate(data?.birth_date?.slice(0, 10) || "");
+    })();
+
     return () => {
-      if (avatarUrl) URL.revokeObjectURL(avatarUrl);
+      active = false;
     };
-  }, [avatarUrl]);
+  }, [open, initialAvatarUrl]);
 
-  function handleAvatarChange(file: File | undefined) {
-    if (!file || !file.type.startsWith("image/")) return;
-    setAvatarUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
-  }
+  const uploadAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    try {
+      setIsUploading(true);
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error("Você deve selecionar uma imagem.");
+      }
 
-  function handleRemoveAvatar() {
-    setAvatarUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
+      const file = event.target.files[0];
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Sessão expirada. Entre novamente para alterar o retrato.");
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: data.publicUrl })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      setAvatarUrl(data.publicUrl);
+      onAvatarChange?.(data.publicUrl);
+    } catch (error) {
+      console.error("Erro ao fazer upload da imagem:", error);
+      alert("Erro ao enviar a imagem. Tente novamente.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const uploadCover = async (event: ChangeEvent<HTMLInputElement>) => {
+    try {
+      setIsCoverUploading(true);
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error("Você deve selecionar uma imagem.");
+      }
+
+      const file = event.target.files[0];
+      const fileExt = file.name.split(".").pop();
+      const fileName = `cover_${Math.random()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Sessão expirada. Entre novamente para alterar a capa.");
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ cover_url: data.publicUrl })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      setCoverUrl(data.publicUrl);
+    } catch (error) {
+      console.error("Erro ao fazer upload da capa:", error);
+      alert("Erro ao enviar a capa. Tente novamente.");
+    } finally {
+      setIsCoverUploading(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
+    }
+  };
+
+  async function handleRemoveAvatar() {
+    setAvatarUrl("");
+    onAvatarChange?.("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: null })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("Erro ao remover o retrato:", error);
+      alert("Erro ao remover a imagem. Tente novamente.");
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (saving) return;
     setSaving(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 1000));
-    setSaving(false);
-    onClose();
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Sessão expirada. Entre novamente para gravar a ficha.");
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          name: name.trim() || null,
+          nickname: nickname.trim() || null,
+          birth_date: birthDate || null,
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+      onClose();
+    } catch (error) {
+      console.error("Erro ao gravar a ficha:", error);
+      alert("Erro ao gravar a ficha. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (!open) return null;
@@ -223,11 +388,15 @@ export default function UserProfileModal({
             if (!saving) onClose();
           }}
           disabled={saving}
-          className="
+          className={`
             absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center
-            text-book-blue/45 transition hover:text-book-blue
-            disabled:opacity-40 sm:top-6 sm:right-6
-          "
+            transition disabled:opacity-40 sm:top-6 sm:right-6
+            ${
+              coverUrl
+                ? "rounded-sm border border-book-gold/30 bg-black/40 text-book-paper backdrop-blur-sm hover:bg-black/60"
+                : "text-book-blue/45 hover:text-book-blue"
+            }
+          `}
           aria-label="Fechar"
         >
           <X className="h-5 w-5" strokeWidth={1.5} />
@@ -235,89 +404,145 @@ export default function UserProfileModal({
 
         <form
           onSubmit={(e) => void handleSubmit(e)}
-          className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-8 sm:px-10 sm:py-10"
+          className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto"
         >
-          <header className="mb-6 shrink-0 text-center sm:mb-8">
-            <p className="font-display text-[0.65rem] tracking-[0.3em] text-book-blue/45 uppercase">
-              Página de Introdução
-            </p>
-            <h2
-              id={titleId}
-              className="mt-2 font-display text-3xl text-book-blue"
-            >
-              Ficha do Escritor
-            </h2>
-            <div
-              aria-hidden
-              className="mx-auto mt-3 h-px w-16 bg-gradient-to-r from-transparent via-book-gold/60 to-transparent"
+          <div className="relative flex flex-col items-center px-6 pt-14 pb-6 sm:px-10">
+            <input
+              type="file"
+              id="avatar"
+              accept="image/*"
+              onChange={(event) => void uploadAvatar(event)}
+              disabled={isUploading}
+              ref={fileInputRef}
+              className="hidden"
             />
-          </header>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => void uploadCover(event)}
+              disabled={isCoverUploading}
+              ref={coverInputRef}
+              className="hidden"
+            />
 
-          {/* Retrato */}
-          <div className="mb-6 flex shrink-0 flex-col items-center gap-3 sm:mb-8">
-            <div
-              className="
-                relative flex h-28 w-28 items-center justify-center overflow-hidden
-                rounded-full border-2 border-book-gold bg-book-blue-light
-                shadow-[0_8px_24px_rgba(15,28,46,0.2)]
-                sm:h-32 sm:w-32
-              "
-            >
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- blob: URL local
-                <img
-                  src={avatarUrl}
-                  alt="Retrato do escritor"
-                  className="h-full w-full object-cover"
-                />
+            <div className="absolute inset-0 z-0 overflow-hidden rounded-t-sm">
+              {coverUrl ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- URL pública do Storage */}
+                  <img
+                    src={coverUrl}
+                    alt="Capa"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-[#F3E8D4]" />
+                </>
               ) : (
-                <User
-                  className="h-12 w-12 text-book-gold/70 sm:h-14 sm:w-14"
-                  strokeWidth={1.25}
-                />
+                <div className="absolute inset-0 bg-book-gold/5" />
               )}
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => handleAvatarChange(e.target.files?.[0])}
-            />
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={isCoverUploading}
+              className="
+                absolute top-5 left-5 z-10 flex items-center gap-2 rounded-sm
+                border border-book-gold/30 bg-black/40 px-3 py-1.5
+                text-[10px] tracking-widest text-book-paper uppercase
+                backdrop-blur-sm transition-colors
+                hover:bg-black/60 disabled:cursor-wait disabled:opacity-60
+                sm:top-6 sm:left-6
+              "
+            >
+              <Image className="h-3 w-3" />
+              {isCoverUploading ? "Enviando..." : "Alterar Capa"}
+            </button>
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="
-                  inline-flex items-center gap-1.5 font-body text-sm
-                  text-book-blue/70 underline decoration-book-gold/40 underline-offset-4
-                  transition hover:text-book-blue hover:decoration-book-gold
-                "
+            <div className="relative z-10 flex w-full flex-col items-center">
+              <p
+                className={`font-display text-[0.65rem] tracking-[0.3em] uppercase ${
+                  coverUrl
+                    ? "text-book-gold drop-shadow-md"
+                    : "text-book-blue/45"
+                }`}
               >
-                <Camera className="h-3.5 w-3.5" strokeWidth={1.5} />
-                Alterar Retrato
-              </button>
-              {avatarUrl ? (
-                <button
-                  type="button"
-                  onClick={handleRemoveAvatar}
+                Página de Introdução
+              </p>
+              <h2
+                id={titleId}
+                className={`mt-2 font-display text-3xl ${
+                  coverUrl
+                    ? "text-book-paper drop-shadow-md"
+                    : "text-book-blue"
+                }`}
+              >
+                Ficha do Escritor
+              </h2>
+              <div
+                aria-hidden
+                className="mx-auto mt-3 mb-6 h-px w-16 bg-gradient-to-r from-transparent via-book-gold/60 to-transparent"
+              />
+
+              <div className="flex flex-col items-center">
+                <div
                   className="
-                    inline-flex items-center gap-1.5 font-body text-sm
-                    text-book-blue/50 underline decoration-book-blue/20 underline-offset-4
-                    transition hover:text-book-blue/80
+                    relative mb-3 flex h-28 w-28 items-center justify-center overflow-hidden
+                    rounded-full border-2 border-book-gold bg-book-blue-light
+                    shadow-[0_8px_24px_rgba(15,28,46,0.2)]
+                    sm:h-32 sm:w-32
                   "
                 >
-                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  Remover
-                </button>
-              ) : null}
+                  {avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- URL pública do Storage
+                    <img
+                      src={avatarUrl}
+                      alt="Retrato do Escritor"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <User
+                      className="h-12 w-12 text-book-gold/70 sm:h-14 sm:w-14"
+                      strokeWidth={1.25}
+                    />
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="
+                      inline-flex items-center gap-1.5 font-body text-sm
+                      text-book-blue/70 underline decoration-book-gold/40 underline-offset-4
+                      transition hover:text-book-blue hover:decoration-book-gold
+                      disabled:cursor-wait disabled:opacity-60
+                    "
+                  >
+                    <Camera className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {isUploading ? "Enviando..." : "Alterar Retrato"}
+                  </button>
+                  {avatarUrl && !isUploading ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveAvatar()}
+                      className="
+                        inline-flex items-center gap-1.5 font-body text-sm
+                        text-book-blue/50 underline decoration-book-blue/20 underline-offset-4
+                        transition hover:text-book-blue/80
+                      "
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      Remover
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Campos */}
-          <div className="flex flex-col gap-5 sm:gap-6">
+          <div className="flex flex-col gap-5 px-6 sm:gap-6 sm:px-10">
             <ProfileField
               id="profile-name"
               label="Nome"
@@ -339,6 +564,15 @@ export default function UserProfileModal({
               value={email}
               onChange={setEmail}
               autoComplete="email"
+              disabled
+            />
+            <ProfileField
+              id="profile-birth-date"
+              label="Data de Nascimento"
+              type="date"
+              value={birthDate}
+              autoComplete="bday"
+              disabled
             />
             <ProfileField
               id="profile-password"
@@ -359,7 +593,7 @@ export default function UserProfileModal({
           </div>
 
           {/* Ações */}
-          <div className="mt-8 flex shrink-0 flex-col items-center gap-4 sm:mt-10 sm:flex-row sm:justify-between">
+          <div className="mt-8 flex shrink-0 flex-col items-center gap-4 px-6 pb-8 sm:mt-10 sm:flex-row sm:justify-between sm:px-10 sm:pb-10">
             <button
               type="button"
               onClick={onClose}

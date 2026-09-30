@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import AddGameModal from "@/components/library/AddGameModal";
 import LibraryHeader from "@/components/library/LibraryHeader";
@@ -29,45 +29,51 @@ export default function Library({ userName }: LibraryProps) {
   const [games, setGames] = useState<Game[]>([]);
   const [catalogReady, setCatalogReady] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [focusGameId, setFocusGameId] = useState<string | null>(null);
+  const loadRequestId = useRef(0);
+
+  const loadGames = useCallback(async (isActive: () => boolean = () => true) => {
+    const requestId = ++loadRequestId.current;
+    const stillCurrent = () => isActive() && requestId === loadRequestId.current;
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!stillCurrent()) return;
+
+    if (!user) {
+      setGames([]);
+      setCatalogReady(true);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("games")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("start_time", { ascending: false });
+
+    if (!stillCurrent()) return;
+
+    if (error) {
+      setCatalogError("Não foi possível abrir o catálogo.");
+      setCatalogReady(true);
+      return;
+    }
+
+    setCatalogError(null);
+    setGames((data ?? []).map((row) => mapGameRow(row as GameRow)));
+    setCatalogReady(true);
+  }, []);
 
   useEffect(() => {
     let active = true;
-
-    void (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!active) return;
-
-      if (!user) {
-        setGames([]);
-        setCatalogReady(true);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("games")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("start_time", { ascending: false });
-
-      if (!active) return;
-
-      if (error) {
-        setCatalogError("Não foi possível abrir o catálogo.");
-        setCatalogReady(true);
-        return;
-      }
-
-      setGames((data ?? []).map((row) => mapGameRow(row as GameRow)));
-      setCatalogReady(true);
-    })();
-
+    void loadGames(() => active);
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadGames]);
 
   const handleAddGame = (game: Game) => {
     setGames((prev) => {
@@ -75,11 +81,28 @@ export default function Library({ userName }: LibraryProps) {
       if (index === -1) return [game, ...prev];
       return prev.map((item) => (item.id === game.id ? game : item));
     });
+    void loadGames();
   };
 
   function closeGameModal() {
     setAddOpen(false);
     setEditingGame(null);
+  }
+
+  const clearGameFocus = useCallback(() => {
+    setFocusGameId(null);
+  }, []);
+
+  function openChronicleGame(game: Game) {
+    setSelectedYear((year) =>
+      year === null || year === game.year ? year : null,
+    );
+    setFocusGameId(game.id);
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector(".library-html-book")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }
 
   const filtered = useMemo(() => {
@@ -111,6 +134,8 @@ export default function Library({ userName }: LibraryProps) {
             onYearChange={setSelectedYear}
             onAddGame={() => setAddOpen(true)}
             nickname={userName ?? "Escritor"}
+            games={games}
+            onOpenGame={openChronicleGame}
           />
 
           {userName ? (
@@ -132,6 +157,9 @@ export default function Library({ userName }: LibraryProps) {
             <HTMLBook
               games={filtered}
               onEdit={(game) => setEditingGame(game)}
+              onRefresh={() => loadGames()}
+              focusGameId={focusGameId}
+              onFocusHandled={clearGameFocus}
             />
           ) : (
             <p className="py-16 text-center font-body text-book-gold/50">

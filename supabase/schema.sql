@@ -7,8 +7,13 @@ create table if not exists public.profiles (
   nickname text,
   birth_date date,
   platform text,
+  avatar_url text,
+  cover_url text,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists avatar_url text;
+alter table public.profiles add column if not exists cover_url text;
 
 create table if not exists public.games (
   id uuid primary key default gen_random_uuid(),
@@ -98,3 +103,28 @@ create policy "Usuários removem seus próprios jogos"
 
 grant select, insert, update on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.games to authenticated;
+
+-- Bucket público para o retrato da ficha. Execute no SQL Editor do Supabase.
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Avatares são públicos" on storage.objects;
+create policy "Avatares são públicos"
+  on storage.objects
+  for select
+  using (bucket_id = 'avatars');
+
+drop policy if exists "Leitores enviam avatares" on storage.objects;
+create policy "Leitores enviam avatares"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (bucket_id = 'avatars');
+
+drop policy if exists "Leitores substituem avatares" on storage.objects;
+create policy "Leitores substituem avatares"
+  on storage.objects
+  for update
+  to authenticated
+  using (bucket_id = 'avatars');
