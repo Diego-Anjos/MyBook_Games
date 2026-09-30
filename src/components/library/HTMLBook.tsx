@@ -26,6 +26,7 @@ type FlipBookHandle = {
     flipNext: () => void;
     flipPrev: () => void;
     flip: (page: number) => void;
+    turnToPage: (page: number) => void;
     getCurrentPageIndex: () => number;
     getPageCount: () => number;
   } | null;
@@ -35,7 +36,9 @@ type HTMLBookProps = {
   games: Game[];
   onEdit: (game: Game) => void;
   onRefresh: () => Promise<void> | void;
-  focusGameId?: string | null;
+  /** Índice 0-based da página esquerda da folha que deve abrir. */
+  focusPageIndex?: number | null;
+  focusToken?: number;
   onFocusHandled?: () => void;
 };
 
@@ -56,6 +59,7 @@ type FlipPageProps = {
   children: ReactNode;
   number: number;
   total: number;
+  id?: string;
 };
 
 function EmptyPrefacePage() {
@@ -93,10 +97,11 @@ function EmptyInstructionsPage() {
 }
 
 const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
-  function FlipPage({ children, number, total }, ref) {
+  function FlipPage({ children, number, total, id }, ref) {
     return (
       <div
         ref={ref}
+        id={id}
         className="
           library-flip-page
           box-border h-full overflow-hidden
@@ -121,7 +126,8 @@ export default function HTMLBook({
   games,
   onEdit,
   onRefresh,
-  focusGameId = null,
+  focusPageIndex = null,
+  focusToken = 0,
   onFocusHandled,
 }: HTMLBookProps) {
   const bookRef = useRef<FlipBookHandle>(null);
@@ -165,26 +171,29 @@ export default function HTMLBook({
   }, [syncPageState]);
 
   useEffect(() => {
-    if (!focusGameId) return;
-    const index = pages.findIndex((page) => page?.id === focusGameId);
-    if (index < 0) return;
+    if (focusPageIndex == null || focusPageIndex < 0) return;
+
+    let attempts = 0;
+    let timer = 0;
 
     const reveal = () => {
       const flip = bookRef.current?.pageFlip?.();
-      if (!flip || index >= flip.getPageCount()) return false;
-      const target = usePortrait ? index : index - (index % 2);
-      flip.flip(target);
+      if (!flip || focusPageIndex >= flip.getPageCount()) {
+        if (attempts < 12) {
+          attempts += 1;
+          timer = window.setTimeout(reveal, 100);
+        }
+        return;
+      }
+
+      flip.turnToPage(focusPageIndex);
+      setCurrentPage(focusPageIndex);
       onFocusHandled?.();
-      return true;
     };
 
-    if (reveal()) return;
-
-    const id = window.setTimeout(() => {
-      reveal();
-    }, 220);
-    return () => window.clearTimeout(id);
-  }, [focusGameId, pages, usePortrait, onFocusHandled]);
+    reveal();
+    return () => window.clearTimeout(timer);
+  }, [focusPageIndex, focusToken, pages, onFocusHandled]);
 
   function flipPrev() {
     bookRef.current?.pageFlip()?.flipPrev();
@@ -312,6 +321,7 @@ export default function HTMLBook({
             pages.map((game, index) => (
               <FlipPage
                 key={game ? `page-${game.id}` : `blank-${index}`}
+                id={game ? `game-${game.id}` : undefined}
                 number={index + 1}
                 total={pages.length}
               >

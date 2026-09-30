@@ -17,6 +17,7 @@
   --color-book-blue-light: var(--book-blue-light);
   --color-book-gold: var(--book-gold);
   --color-book-paper: var(--book-paper);
+  --color-book-bg: var(--book-blue);
   --font-sans: var(--font-lora);
   --font-display: var(--font-playfair);
   --font-body: var(--font-lora);

@@ -30,7 +30,7 @@ type LibraryHeaderProps = {
   nickname?: string;
   avatarUrl?: string | null;
   games?: Game[];
-  onOpenGame?: (game: Game) => void;
+  onOpenGame?: (game: Game, pageIndex: number) => void;
 };
 
 function CornerFiligree({ className }: { className?: string }) {
@@ -558,7 +558,65 @@ export default function LibraryHeader({
                                 key={game.id}
                                 onClick={() => {
                                   setIsStatusModalOpen(false);
-                                  onOpenGame?.(game);
+
+                                  const isMobile = window.innerWidth < 768;
+                                  const itemsPerPage = isMobile ? 1 : 2;
+
+                                  const catalogYear =
+                                    selectedYear === null ||
+                                    selectedYear === game.year
+                                      ? selectedYear
+                                      : null;
+                                  const catalogGames =
+                                    catalogYear === null
+                                      ? (games ?? [])
+                                      : (games ?? []).filter(
+                                          (item) => item.year === catalogYear,
+                                        );
+                                  const gameIndex = catalogGames.findIndex(
+                                    (g) => g.id === game.id,
+                                  );
+
+                                  if (gameIndex !== -1) {
+                                    // page-flip começa em 0; a folha abre na página esquerda
+                                    const targetPage =
+                                      Math.floor(gameIndex / itemsPerPage) *
+                                      itemsPerPage;
+
+                                    onOpenGame?.(game, targetPage);
+
+                                    setTimeout(() => {
+                                      const element = document.getElementById(
+                                        `game-${game.id}`,
+                                      );
+                                      if (element) {
+                                        element.scrollIntoView({
+                                          behavior: "smooth",
+                                          block: "center",
+                                        });
+                                        element.classList.add(
+                                          "ring-2",
+                                          "ring-book-gold",
+                                          "ring-offset-4",
+                                          "ring-offset-book-bg",
+                                          "transition-all",
+                                          "duration-500",
+                                        );
+                                        setTimeout(() => {
+                                          element.classList.remove(
+                                            "ring-2",
+                                            "ring-book-gold",
+                                            "ring-offset-4",
+                                            "ring-offset-book-bg",
+                                          );
+                                        }, 1500);
+                                      } else {
+                                        console.warn(
+                                          "Elemento não encontrado no DOM. Verifique se o ID está no card principal e se o tempo de renderização foi suficiente.",
+                                        );
+                                      }
+                                    }, 400);
+                                  }
                                 }}
                                 className="group flex w-full cursor-pointer gap-5 border border-book-gold/20 bg-book-gold/5 p-4 text-left transition-all duration-300 hover:-translate-y-1 hover:bg-book-gold/10 hover:shadow-[0_4px_20px_rgba(212,175,55,0.15)] sm:p-5"
                               >

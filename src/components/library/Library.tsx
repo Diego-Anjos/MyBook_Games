@@ -29,7 +29,8 @@ export default function Library({ userName }: LibraryProps) {
   const [games, setGames] = useState<Game[]>([]);
   const [catalogReady, setCatalogReady] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [focusGameId, setFocusGameId] = useState<string | null>(null);
+  const [focusPageIndex, setFocusPageIndex] = useState<number | null>(null);
+  const [focusToken, setFocusToken] = useState(0);
   const loadRequestId = useRef(0);
 
   const loadGames = useCallback(async (isActive: () => boolean = () => true) => {
@@ -90,19 +91,15 @@ export default function Library({ userName }: LibraryProps) {
   }
 
   const clearGameFocus = useCallback(() => {
-    setFocusGameId(null);
+    setFocusPageIndex(null);
   }, []);
 
-  function openChronicleGame(game: Game) {
+  function openChronicleGame(game: Game, pageIndex: number) {
     setSelectedYear((year) =>
       year === null || year === game.year ? year : null,
     );
-    setFocusGameId(game.id);
-    window.requestAnimationFrame(() => {
-      document
-        .querySelector(".library-html-book")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+    setFocusPageIndex(pageIndex);
+    setFocusToken((token) => token + 1);
   }
 
   const filtered = useMemo(() => {
@@ -158,7 +155,8 @@ export default function Library({ userName }: LibraryProps) {
               games={filtered}
               onEdit={(game) => setEditingGame(game)}
               onRefresh={() => loadGames()}
-              focusGameId={focusGameId}
+              focusPageIndex={focusPageIndex}
+              focusToken={focusToken}
               onFocusHandled={clearGameFocus}
             />
           ) : (
