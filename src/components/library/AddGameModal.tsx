@@ -120,7 +120,7 @@ function parseSessionDate(
 }
 
 const dateFieldClassName = `
-  w-full bg-transparent py-2 font-body text-sm text-book-paper
+  w-full max-w-full bg-transparent py-2 font-body text-sm text-book-paper
   outline-none border-0 border-b border-book-gold/55
   focus:border-book-gold
 `;
@@ -456,7 +456,7 @@ export default function AddGameModal({
 
   return (
     <>
-    <div className="animate-in fade-in fixed inset-0 z-[9950] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm duration-300 sm:p-6">
+    <div className="animate-in fade-in fixed inset-0 z-[9950] flex items-stretch justify-center bg-black/80 p-0 backdrop-blur-sm duration-300 md:items-center md:p-4">
       <button
         type="button"
         aria-label="Fechar"
@@ -468,9 +468,9 @@ export default function AddGameModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="animate-in zoom-in-95 relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-sm border-2 border-book-gold/40 bg-book-blue text-book-gold shadow-2xl duration-300"
+        className="animate-in zoom-in-95 relative flex h-full min-h-0 w-full min-w-0 max-w-[100vw] flex-col overflow-hidden rounded-none border-0 bg-book-blue text-book-gold shadow-2xl duration-300 md:h-auto md:max-h-[90vh] md:max-w-3xl md:rounded-sm md:border-2 md:border-book-gold/40"
       >
-        <div className="flex items-center justify-between border-b border-book-gold/20 bg-book-blue-light/50 p-6">
+        <div className="flex shrink-0 items-center justify-between border-b border-book-gold/20 bg-book-blue-light/50 p-4 md:p-6">
           <div>
             <p className="mb-1 text-[10px] tracking-widest text-book-gold uppercase">
               {step === "search" && !isEditing
@@ -496,11 +496,11 @@ export default function AddGameModal({
           </button>
         </div>
 
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
 
         {step === "search" && !isEditing ? (
           <>
-            <div className="relative z-10 border-b border-book-gold/20 px-6 py-4">
+            <div className="relative z-10 shrink-0 border-b border-book-gold/20 px-4 py-4 md:px-6">
               <label htmlFor="game-search" className="sr-only">
                 Buscar jogo
               </label>
@@ -607,19 +607,25 @@ export default function AddGameModal({
                 </button>
               )}
 
-              <div className={`${isEditing ? "" : "mt-4"} flex items-center gap-3`}>
+              <div className={`${isEditing ? "" : "mt-4"} flex w-full min-w-0 items-center gap-3`}>
                 <GameCover
                   url={sheetCover}
                   sizes="48px"
                   iconClassName="h-5 w-5 text-book-gold/70"
                   frameClassName="relative h-16 w-12 shrink-0 overflow-hidden rounded-sm border border-book-gold/40 bg-book-blue-light"
                 />
-                <div className="min-w-0">
-                  <p className="font-display text-lg leading-snug tracking-wide text-book-gold">
+                <div className="flex min-w-0 w-full flex-1 flex-col justify-center">
+                  <p
+                    className="w-full truncate font-display text-lg leading-snug tracking-wide text-book-gold"
+                    title={sheetTitle}
+                  >
                     {sheetTitle}
                   </p>
                   {sheetMeta ? (
-                    <p className="mt-0.5 font-body text-xs text-book-paper/60">
+                    <p
+                      className="mt-0.5 w-full truncate font-body text-xs text-book-paper/60"
+                      title={sheetMeta}
+                    >
                       {sheetMeta}
                     </p>
                   ) : null}
@@ -627,9 +633,9 @@ export default function AddGameModal({
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto hide-scrollbar px-6 py-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="flex flex-col gap-1.5">
+            <div className="flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-book-gold/20 md:px-6 md:py-5">
+              <div className="flex w-full flex-col gap-4 md:flex-row md:gap-6">
+                <label className="relative flex w-full flex-col gap-1.5">
                   <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
                     Data e Hora de Início
                   </span>
@@ -651,12 +657,12 @@ export default function AddGameModal({
                     dateFormat="dd/MM/yyyy HH:mm"
                     locale={ptBR}
                     required
-                    wrapperClassName="w-full"
+                    wrapperClassName="w-full max-w-full"
                     popperContainer={CalendarPopper}
                     className={dateFieldClassName}
                   />
                 </label>
-                <label className="flex flex-col gap-1.5">
+                <label className="relative flex w-full flex-col gap-1.5">
                   <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
                     Data e Hora de Fim
                   </span>
@@ -679,7 +685,7 @@ export default function AddGameModal({
                     dateFormat="dd/MM/yyyy HH:mm"
                     locale={ptBR}
                     minDate={startedAt ?? undefined}
-                    wrapperClassName="w-full"
+                    wrapperClassName="w-full max-w-full"
                     popperContainer={CalendarPopper}
                     className={dateFieldClassName}
                   />
@@ -779,7 +785,7 @@ export default function AddGameModal({
                   rows={5}
                   placeholder="Escreva o capítulo desta sessão…"
                   className="
-                    resize-none rounded-sm border border-book-gold/55
+                    w-full resize-none break-words whitespace-pre-wrap rounded-sm border border-book-gold/55
                     bg-transparent px-3 py-2.5 font-body text-sm
                     text-book-paper placeholder:text-book-gold/35
                     outline-none focus:border-book-gold
@@ -801,7 +807,7 @@ export default function AddGameModal({
                 type="submit"
                 disabled={isSubmitting}
                 className="
-                  flex w-full items-center justify-center
+                  flex w-full items-center justify-center md:w-auto
                   rounded-sm px-4 py-3
                   bg-gradient-to-b from-[#E8D08A] via-book-gold to-[#A8842E]
                   font-display text-sm tracking-[0.12em] text-book-blue uppercase

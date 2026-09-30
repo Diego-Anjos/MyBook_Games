@@ -14,6 +14,58 @@ function metaString(user: User, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Código numérico de 8 dígitos, no estilo de um UID de viajante. */
+export function generateNumericUid(): string {
+  return String(Math.floor(10000000 + Math.random() * 90000000));
+}
+
+/**
+ * Garante um UID na ficha. Se a coluna ainda não existir no banco, devolve null
+ * sem interromper o restante do perfil.
+ */
+export async function ensureNumericUid(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("uid")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const current = typeof data.uid === "string" ? data.uid.trim() : "";
+  if (/^\d{8}$/.test(current)) return current;
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const uid = generateNumericUid();
+    const { data: updated, error: updateError } = await supabase
+      .from("profiles")
+      .update({ uid })
+      .eq("id", userId)
+      .is("uid", null)
+      .select("uid")
+      .maybeSingle();
+
+    if (!updateError && updated?.uid) return updated.uid;
+
+    if (!updateError) {
+      const { data: currentRow } = await supabase
+        .from("profiles")
+        .select("uid")
+        .eq("id", userId)
+        .maybeSingle();
+      const assigned =
+        typeof currentRow?.uid === "string" ? currentRow.uid.trim() : "";
+      if (/^\d{8}$/.test(assigned)) return assigned;
+    }
+
+    if (updateError && !/duplicate|unique/i.test(updateError.message)) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 /** Nome mostrado na biblioteca: apelido, nome, depois o e-mail. */
 export async function loadReaderName(user: User): Promise<string> {
   const { data } = await supabase
@@ -53,12 +105,19 @@ export async function ensureProfile(
       .maybeSingle();
 
     if (readError) return { error: readError.message };
-    if (existing) return { error: null };
+    if (existing) {
+      await ensureNumericUid(user.id);
+      return { error: null };
+    }
   }
 
   const { error } = await supabase.from("profiles").upsert(payload, {
     onConflict: "id",
   });
+
+  if (!error) {
+    await ensureNumericUid(user.id);
+  }
 
   return { error: error?.message ?? null };
 }

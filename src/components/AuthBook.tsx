@@ -1213,7 +1213,7 @@ export default function AuthBook() {
 
   if (!clientReady) {
     return (
-      <div className="mx-auto flex w-full justify-center px-3 sm:px-4">
+      <div className="mx-auto my-auto flex w-full justify-center px-3 sm:px-4">
         <BookLoadingPlaceholder />
       </div>
     );
@@ -1221,7 +1221,7 @@ export default function AuthBook() {
 
   return (
     <>
-    <div className="mx-auto flex w-full justify-center px-3 sm:px-4">
+    <div className="mx-auto my-auto flex w-full justify-center px-3 sm:px-4">
       <StableFlipBook
         ref={bookRef}
         className="auth-html-book mx-auto"

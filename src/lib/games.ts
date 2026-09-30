@@ -61,6 +61,24 @@ function releaseYear(value: string | null): number | null {
   return Number.isFinite(year) ? year : null;
 }
 
+/** A sessão entra no catálogo quando o mês e o ano escolhidos batem com `start_time`. */
+export function matchesSessionFilters(
+  game: Game,
+  selectedMonth: string,
+  selectedYear: string,
+): boolean {
+  const gameDate = game.sessionStart ? new Date(game.sessionStart) : null;
+  const valid = gameDate !== null && !Number.isNaN(gameDate.getTime());
+  const matchMonth =
+    selectedMonth === "Todos" ||
+    (valid && (gameDate.getMonth() + 1).toString() === selectedMonth);
+  const matchYear =
+    selectedYear === "Todos" ||
+    (valid && gameDate.getFullYear().toString() === selectedYear);
+
+  return matchMonth && matchYear;
+}
+
 /** Converte uma linha de `games` para o modelo usado pelo livro. */
 export function mapGameRow(row: GameRow): Game {
   const start = formatSession(row.start_time);

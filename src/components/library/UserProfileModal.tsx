@@ -8,7 +8,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import { Camera, Image, Trash2, User, X } from "lucide-react";
+import { ensureNumericUid } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
 type UserProfileModalProps = {
@@ -18,9 +20,22 @@ type UserProfileModalProps = {
   initialNickname?: string;
   initialEmail?: string;
   initialBirthDate?: string;
+  initialPlatform?: string;
   initialAvatarUrl?: string;
   onAvatarChange?: (url: string) => void;
 };
+
+const PLATFORM_OPTIONS = ["PC", "PlayStation", "Xbox", "Nintendo"] as const;
+
+function platformOption(value: string | null | undefined): string {
+  const raw = (value || "").trim().toLowerCase();
+  if (raw === "playstation" || raw === "ps" || raw === "ps4" || raw === "ps5") {
+    return "PlayStation";
+  }
+  if (raw === "xbox") return "Xbox";
+  if (raw === "nintendo" || raw === "switch") return "Nintendo";
+  return PLATFORM_OPTIONS.find((option) => option.toLowerCase() === raw) || "PC";
+}
 
 function CornerFiligree({ className }: { className?: string }) {
   return (
@@ -112,9 +127,11 @@ export default function UserProfileModal({
   initialNickname = "Escritor",
   initialEmail = "",
   initialBirthDate = "",
+  initialPlatform = "",
   initialAvatarUrl = "",
   onAvatarChange,
 }: UserProfileModalProps) {
+  const router = useRouter();
   const titleId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -123,6 +140,7 @@ export default function UserProfileModal({
   const [nickname, setNickname] = useState(initialNickname);
   const [email, setEmail] = useState(initialEmail);
   const [birthDate, setBirthDate] = useState("");
+  const [platform, setPlatform] = useState(initialPlatform || "PC");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl || "");
@@ -130,6 +148,8 @@ export default function UserProfileModal({
   const [coverUrl, setCoverUrl] = useState("");
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [uid, setUid] = useState("");
 
   // Sync when modal opens with fresh props
   useEffect(() => {
@@ -159,12 +179,12 @@ export default function UserProfileModal({
     if (!open) return;
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !saving) onClose();
+      if (e.key === "Escape" && !saving && !isSuccess) onClose();
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose, saving]);
+  }, [open, onClose, saving, isSuccess]);
 
   useEffect(() => {
     if (!open) return;
@@ -177,17 +197,26 @@ export default function UserProfileModal({
       if (!user || !active) return;
 
       setEmail(user.email || "");
+      setUid("");
 
       const { data } = await supabase
         .from("profiles")
-        .select("avatar_url, cover_url, birth_date")
+        .select("name, nickname, platform, avatar_url, cover_url, birth_date")
         .eq("id", user.id)
         .maybeSingle();
 
       if (!active) return;
+      if (data) {
+        setName(data.name ?? "");
+        setNickname(data.nickname ?? "");
+        setPlatform(platformOption(data.platform || initialPlatform));
+      }
       setAvatarUrl(data?.avatar_url || initialAvatarUrl || "");
       setCoverUrl(data?.cover_url || "");
       setBirthDate(data?.birth_date?.slice(0, 10) || "");
+
+      const assignedUid = await ensureNumericUid(user.id);
+      if (active && assignedUid) setUid(assignedUid);
     })();
 
     return () => {
@@ -314,23 +343,60 @@ export default function UserProfileModal({
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        throw new Error("Sessão expirada. Entre novamente para gravar a ficha.");
+        alert("Sessão expirada. Faça login novamente.");
+        return;
+      }
+      console.log("========== INICIANDO ATUALIZAÇÃO DO PERFIL ==========");
+
+      if (password) {
+        if (password !== confirmPassword) {
+          alert("As novas senhas não coincidem.");
+          return;
+        }
+
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password,
+        });
+
+        if (passwordError) {
+          console.error("Erro ao atualizar senha:", passwordError);
+          alert("Erro ao atualizar senha: " + passwordError.message);
+          return;
+        }
+        console.log("Senha atualizada com sucesso no Auth.");
       }
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          name: name.trim() || null,
-          nickname: nickname.trim() || null,
-          birth_date: birthDate || null,
-        })
-        .eq("id", user.id);
+      const profilePayload = {
+        id: user.id,
+        name: name,
+        nickname: nickname,
+        platform: platform,
+      };
 
-      if (error) throw error;
-      onClose();
-    } catch (error) {
-      console.error("Erro ao gravar a ficha:", error);
-      alert("Erro ao gravar a ficha. Tente novamente.");
+      const { data: updatedData, error: profileError } = await supabase
+        .from("profiles")
+        .upsert(profilePayload)
+        .select();
+
+      console.log("Resultado real do banco de dados:", updatedData);
+
+      if (profileError) {
+        console.error("Erro ao atualizar tabela profiles:", profileError);
+        alert("Erro ao salvar os dados do perfil: " + profileError.message);
+        return;
+      }
+      console.log("Dados do perfil atualizados com sucesso.");
+
+      setPassword("");
+      setConfirmPassword("");
+
+      setIsSuccess(true);
+
+      setTimeout(() => {
+        setIsSuccess(false);
+        router.refresh();
+        onClose();
+      }, 2000);
     } finally {
       setSaving(false);
     }
@@ -345,7 +411,7 @@ export default function UserProfileModal({
         aria-label="Fechar perfil"
         className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
         onClick={() => {
-          if (!saving) onClose();
+          if (!saving && !isSuccess) onClose();
         }}
       />
 
@@ -385,9 +451,9 @@ export default function UserProfileModal({
         <button
           type="button"
           onClick={() => {
-            if (!saving) onClose();
+            if (!saving && !isSuccess) onClose();
           }}
-          disabled={saving}
+          disabled={saving || isSuccess}
           className={`
             absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center
             transition disabled:opacity-40 sm:top-6 sm:right-6
@@ -537,6 +603,24 @@ export default function UserProfileModal({
                     </button>
                   ) : null}
                 </div>
+
+                <div className="flex items-center justify-center gap-2 my-2">
+                  <span className="text-xs font-mono tracking-widest text-book-gold/80">
+                    UID: {uid || "Carregando..."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (uid) {
+                        navigator.clipboard.writeText(uid);
+                        alert("UID copiado para a área de transferência!");
+                      }
+                    }}
+                    className="text-[10px] text-book-gold hover:text-white underline tracking-wider"
+                  >
+                    Copiar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -547,14 +631,14 @@ export default function UserProfileModal({
               id="profile-name"
               label="Nome"
               value={name}
-              onChange={setName}
+              onChange={(value) => setName(value)}
               autoComplete="name"
             />
             <ProfileField
               id="profile-nickname"
               label="Nickname"
               value={nickname}
-              onChange={setNickname}
+              onChange={(value) => setNickname(value)}
               autoComplete="username"
             />
             <ProfileField
@@ -574,6 +658,25 @@ export default function UserProfileModal({
               autoComplete="bday"
               disabled
             />
+            <div className="mb-4">
+              <label
+                htmlFor="profile-platform"
+                className="block text-[10px] text-book-gold/80 tracking-widest uppercase mb-1"
+              >
+                Plataforma Principal
+              </label>
+              <select
+                id="profile-platform"
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+                className="w-full bg-transparent border-b border-book-gold/30 pb-2 text-book-blue focus:outline-none focus:border-book-gold transition-colors text-sm cursor-pointer"
+              >
+                <option value="PC" className="bg-book-bg text-book-paper">PC</option>
+                <option value="PlayStation" className="bg-book-bg text-book-paper">PlayStation</option>
+                <option value="Xbox" className="bg-book-bg text-book-paper">Xbox</option>
+                <option value="Nintendo" className="bg-book-bg text-book-paper">Nintendo</option>
+              </select>
+            </div>
             <ProfileField
               id="profile-password"
               label="Nova Senha"
@@ -625,6 +728,20 @@ export default function UserProfileModal({
             </button>
           </div>
         </form>
+
+        {isSuccess && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-book-bg/95 backdrop-blur-sm rounded-lg">
+            <div className="text-center animate-in fade-in zoom-in duration-300">
+              <div className="w-16 h-16 border-2 border-book-gold rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-book-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="font-display text-book-gold text-2xl mb-1">Registros Atualizados</h3>
+              <p className="text-book-paper/80 text-sm">A sua ficha foi reescrita com sucesso.</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

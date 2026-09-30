@@ -10,9 +10,8 @@ export default function BookLayout({
   return (
     <div
       className="
-        relative w-full min-h-screen
-        flex items-center justify-center
-        px-2 py-4 sm:px-6 sm:py-10
+        relative flex min-h-screen w-full items-start justify-center
+        p-0 md:items-center md:px-6 md:py-10
         bg-[url('/background.png')] bg-cover bg-center bg-no-repeat
         bg-scroll md:bg-fixed
       "
@@ -27,7 +26,9 @@ export default function BookLayout({
         "
       />
 
-      <div className="relative z-10 w-full max-w-6xl">{children}</div>
+      <div className="relative z-10 flex min-h-screen w-full max-w-6xl flex-col justify-center has-[.library-shell]:justify-start md:min-h-0 md:justify-center">
+        {children}
+      </div>
     </div>
   );
 }

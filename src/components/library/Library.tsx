@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import AddGameModal from "@/components/library/AddGameModal";
 import LibraryHeader from "@/components/library/LibraryHeader";
-import { LIBRARY_YEARS, type Game } from "@/data/mock-games";
+import type { Game } from "@/data/mock-games";
 import type { GameRow } from "@/lib/database";
-import { mapGameRow } from "@/lib/games";
+import { mapGameRow, matchesSessionFilters } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
 
 const HTMLBook = dynamic(() => import("@/components/library/HTMLBook"), {
@@ -23,7 +23,8 @@ type LibraryProps = {
 };
 
 export default function Library({ userName }: LibraryProps) {
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState("Todos");
+  const [selectedYear, setSelectedYear] = useState("Todos");
   const [addOpen, setAddOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [games, setGames] = useState<Game[]>([]);
@@ -94,52 +95,51 @@ export default function Library({ userName }: LibraryProps) {
     setFocusPageIndex(null);
   }, []);
 
-  function openChronicleGame(game: Game, pageIndex: number) {
-    setSelectedYear((year) =>
-      year === null || year === game.year ? year : null,
-    );
+  function openChronicleGame(_game: Game, pageIndex: number) {
     setFocusPageIndex(pageIndex);
     setFocusToken((token) => token + 1);
   }
 
   const filtered = useMemo(() => {
-    if (selectedYear === null) return games;
-    return games.filter((game) => game.year === selectedYear);
-  }, [games, selectedYear]);
+    return games.filter((game) =>
+      matchesSessionFilters(game, selectedMonth, selectedYear),
+    );
+  }, [games, selectedMonth, selectedYear]);
 
   return (
     <>
       <div
         className="
-          relative rounded-sm bg-book-blue text-book-gold
-          shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.35)]
+          library-shell relative m-0 flex min-h-screen w-full flex-col
+          rounded-none border-0 bg-book-blue text-book-gold shadow-none
+          md:min-h-0 md:rounded-sm
+          md:shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.35)]
         "
       >
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-2 border border-book-gold/50 sm:inset-3"
+          className="pointer-events-none absolute inset-2 border border-book-gold/50 md:inset-3"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-3 border border-book-gold/30 sm:inset-4"
+          className="pointer-events-none absolute inset-3 border border-book-gold/30 md:inset-4"
         />
 
-        <div className="relative z-10 flex flex-col gap-4 p-3 sm:gap-6 sm:p-8 md:p-10">
+        <div className="relative z-10 flex flex-col gap-3 p-3 md:gap-6 md:p-10">
           <LibraryHeader
-            years={LIBRARY_YEARS}
+            selectedMonth={selectedMonth}
+            setSelectedMonth={setSelectedMonth}
             selectedYear={selectedYear}
-            onYearChange={setSelectedYear}
+            setSelectedYear={setSelectedYear}
             onAddGame={() => setAddOpen(true)}
             nickname={userName ?? "Escritor"}
-            games={games}
+            filteredGames={filtered}
             onOpenGame={openChronicleGame}
           />
 
-          {userName ? (
-            <p className="font-body text-sm text-book-gold/50">
-              Catálogo do {userName}
-            </p>
-          ) : null}
+          <p className="mb-4 px-4 font-display text-lg text-book-gold md:px-0">
+            Catálogo de {userName || "Escritor"}
+          </p>
 
           {catalogError ? (
             <p

@@ -7,12 +7,23 @@ export interface ProfileRow {
   platform: string | null;
   avatar_url: string | null;
   cover_url: string | null;
+  uid: string | null;
 }
 
-export type ProfileInsert = Omit<ProfileRow, "avatar_url" | "cover_url"> & {
+export type ProfileInsert = Omit<ProfileRow, "avatar_url" | "cover_url" | "uid"> & {
   avatar_url?: string | null;
   cover_url?: string | null;
+  uid?: string | null;
 };
+
+/** Laço entre dois leitores, encontrado pelo UID. */
+export interface FriendshipRow {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  status: "pending" | "accepted";
+  created_at: string;
+}
 
 /** Linha da tabela `games`. */
 export interface GameRow {
@@ -73,6 +84,15 @@ export interface Database {
         Row: ProfileRow;
         Insert: ProfileInsert;
         Update: Partial<ProfileInsert>;
+      };
+      friendships: {
+        Row: FriendshipRow;
+        Insert: {
+          user_id: string;
+          friend_id: string;
+          status?: FriendshipRow["status"];
+        };
+        Update: Partial<Pick<FriendshipRow, "status">>;
       };
       games: {
         Row: GameRow;

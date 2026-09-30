@@ -89,8 +89,7 @@ function EmptyInstructionsPage() {
       </h3>
       <p className="max-w-sm font-body leading-relaxed text-book-paper/70">
         Para registrar sua primeira memória, clique em{" "}
-        <span className="text-book-gold">+ Adicionar Novo Jogo</span> no menu
-        superior.
+        <span className="text-book-gold">+ Adicionar Novo Jogo</span>.
       </p>
     </div>
   );
@@ -258,7 +257,7 @@ export default function HTMLBook({
   >;
 
   const portraitHeight = height
-    ? Math.min(680, Math.max(360, height - 404))
+    ? Math.min(680, Math.max(360, height - 320))
     : 480;
 
   const bookKey = [
@@ -277,7 +276,7 @@ export default function HTMLBook({
       : "Abrindo livro…";
 
   return (
-    <div className="flex w-full flex-col items-center gap-4 sm:gap-5">
+    <div className="flex w-full flex-col items-center gap-2 pb-8 sm:gap-5 md:pb-0">
       <div className="w-full max-w-5xl">
         <FlipBook
           key={bookKey}

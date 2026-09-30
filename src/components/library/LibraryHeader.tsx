@@ -13,23 +13,23 @@ import {
   User,
   X,
 } from "lucide-react";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  FeatherIcon,
-} from "@/components/icons";
+import { FeatherIcon } from "@/components/icons";
+import FriendsModal from "@/components/library/FriendsModal";
+import MessagesModal from "@/components/library/MessagesModal";
+import NotificationsModal from "@/components/library/NotificationsModal";
 import UserProfileModal from "@/components/library/UserProfileModal";
 import type { Game } from "@/data/mock-games";
 import { supabase } from "@/lib/supabase";
 
 type LibraryHeaderProps = {
-  years: readonly number[];
-  selectedYear: number | null;
-  onYearChange: (year: number | null) => void;
+  selectedMonth: string;
+  setSelectedMonth: (month: string) => void;
+  selectedYear: string;
+  setSelectedYear: (year: string) => void;
   onAddGame?: () => void;
   nickname?: string;
   avatarUrl?: string | null;
-  games?: Game[];
+  filteredGames?: Game[];
   onOpenGame?: (game: Game, pageIndex: number) => void;
 };
 
@@ -149,20 +149,42 @@ function LogoutModal({
 }
 
 export default function LibraryHeader({
-  years,
+  selectedMonth,
+  setSelectedMonth,
   selectedYear,
-  onYearChange,
+  setSelectedYear,
   onAddGame,
   nickname = "Escritor",
   avatarUrl = null,
-  games,
+  filteredGames = [],
   onOpenGame,
 }: LibraryHeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isFriendsModalOpen, setIsFriendsModalOpen] = useState(false);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
+  const [isMessagesModalOpen, setIsMessagesModalOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [portraitUrl, setPortraitUrl] = useState(avatarUrl ?? "");
+  const [profilePlatform, setProfilePlatform] = useState("PC");
+  const [timelineYear, setTimelineYear] = useState("Todos");
+
+  const checkNotifications = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { count } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("is_read", false);
+    setHasUnread((count || 0) > 0);
+  };
+
+  useEffect(() => {
+    checkNotifications();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -175,11 +197,13 @@ export default function LibraryHeader({
 
       const { data } = await supabase
         .from("profiles")
-        .select("avatar_url")
+        .select("avatar_url, platform")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (active) setPortraitUrl(data?.avatar_url || "");
+      if (!active) return;
+      setPortraitUrl(data?.avatar_url || "");
+      setProfilePlatform(data?.platform || "PC");
     })();
 
     return () => {
@@ -187,78 +211,56 @@ export default function LibraryHeader({
     };
   }, []);
 
-  const currentYear = new Date().getFullYear();
+  const modalFilteredGames = filteredGames.filter((game) => {
+    if (timelineYear === "Todos") return true;
+    const date = new Date(game.sessionStart || game.sessionEnd || "");
+    return date.getFullYear().toString() === timelineYear;
+  });
 
-  const gamesThisYear =
-    games?.filter((game) => {
-      const date = new Date(game.sessionEnd || game.sessionStart || new Date());
-      return date.getFullYear() === currentYear;
-    }) || [];
+  const totalGames = modalFilteredGames.length;
+  const finishedGames = modalFilteredGames.filter((game) => game.zerado).length;
+  const playingGames = modalFilteredGames.filter((game) => !game.zerado).length;
 
-  const clearedThisYear = gamesThisYear.filter((game) => game.zerado).length;
-  const totalGamesThisYear = gamesThisYear.length;
-
-  const totalPlaytimeThisYear = gamesThisYear.reduce((acc, game) => {
+  const totalHours = modalFilteredGames.reduce((acc, game) => {
     return acc + (game.playtimeHours || 0);
   }, 0);
 
-  const gamesByMonth = gamesThisYear.reduce<Record<number, Game[]>>(
+  const sortedGames = [...modalFilteredGames].sort((a, b) => {
+    const dateA = new Date(a.sessionStart || a.sessionEnd || 0).getTime();
+    const dateB = new Date(b.sessionStart || b.sessionEnd || 0).getTime();
+    const timeA = Number.isNaN(dateA) ? 0 : dateA;
+    const timeB = Number.isNaN(dateB) ? 0 : dateB;
+    return timeB - timeA;
+  });
+
+  const timelineData = sortedGames.reduce<Record<string, Record<string, Game[]>>>(
     (acc, game) => {
-      const date = new Date(game.sessionEnd || game.sessionStart || new Date());
-      const month = date.getMonth();
-      if (!acc[month]) acc[month] = [];
-      acc[month].push(game);
+      const date = new Date(game.sessionStart || game.sessionEnd || "");
+      if (Number.isNaN(date.getTime())) return acc;
+
+      const year = date.getFullYear().toString();
+      const month = date.toLocaleString("pt-BR", { month: "long" });
+      const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+
+      if (!acc[year]) acc[year] = {};
+      if (!acc[year][capitalizedMonth]) acc[year][capitalizedMonth] = [];
+
+      acc[year][capitalizedMonth].push(game);
       return acc;
     },
     {},
   );
 
-  const monthNames = [
-    "Janeiro",
-    "Fevereiro",
-    "Março",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-  ];
-
-  const currentIndex =
-    selectedYear === null ? -1 : years.indexOf(selectedYear);
-
-  function goPrev() {
-    if (years.length === 0) return;
-    if (selectedYear === null) {
-      onYearChange(years[years.length - 1]);
-      return;
-    }
-    const prev = currentIndex <= 0 ? years[years.length - 1] : years[currentIndex - 1];
-    onYearChange(prev);
-  }
-
-  function goNext() {
-    if (years.length === 0) return;
-    if (selectedYear === null) {
-      onYearChange(years[0]);
-      return;
-    }
-    const next =
-      currentIndex >= years.length - 1 ? years[0] : years[currentIndex + 1];
-    onYearChange(next);
-  }
+  const sortedYears = Object.keys(timelineData).sort(
+    (a, b) => Number(b) - Number(a),
+  );
 
   return (
     <>
-      <header className="relative border-b border-book-gold/25 pb-4 sm:pb-5">
-        <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-          {/* Perfil + seletor de anos */}
-          <div className="flex w-full min-w-0 flex-col gap-2.5 md:flex-1 md:justify-start">
-            <div className="flex items-center gap-4">
+      <header className="relative border-b border-book-gold/25 pb-3 md:pb-5">
+        <div className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-4 md:flex-nowrap md:gap-4 md:px-0">
+          {/* Esquerda: Menu e Avatar */}
+          <div className="flex shrink-0 items-center gap-2 md:gap-4">
               <div className="relative">
                 <button
                   type="button"
@@ -291,6 +293,56 @@ export default function LibraryHeader({
                           >
                             <Trophy className="h-4 w-4" />
                             Status do Escritor
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsFriendsModalOpen(true);
+                            }}
+                            className="w-full text-left px-4 py-2 text-book-gold hover:bg-book-gold/10 transition-colors flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                            Amigos
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsNotificationsModalOpen(true);
+                            }}
+                            className="w-full text-left px-4 py-2 text-book-gold hover:bg-book-gold/10 transition-colors flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              Notificações
+                            </div>
+                            {hasUnread && (
+                              <span className="text-book-gold animate-pulse shadow-[0_0_8px_#D4AF37] rounded-full text-xs">✦</span>
+                            )}
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsMessagesModalOpen(true);
+                            }}
+                            className="w-full text-left px-4 py-2 text-book-gold hover:bg-book-gold/10 transition-colors flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                            Mensagens
                           </button>
                         </li>
                       </ul>
@@ -347,66 +399,11 @@ export default function LibraryHeader({
               </div>
             </div>
 
-            <div className="flex w-full min-w-0 items-center gap-1 sm:gap-2">
-              <button
-                type="button"
-                onClick={goPrev}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-book-gold/70 transition hover:text-book-gold md:h-8 md:w-8"
-                aria-label="Ano anterior"
-              >
-                <ChevronLeftIcon className="h-4 w-4" />
-              </button>
-              <div
-                className="
-                  flex w-full items-center gap-3 overflow-x-auto
-                  whitespace-nowrap hide-scrollbar
-                  font-display text-sm tracking-wide
-                  scroll-smooth md:w-auto
-                  [-webkit-overflow-scrolling:touch]
-                "
-              >
-                <button
-                  type="button"
-                  onClick={() => onYearChange(null)}
-                  className={`inline-flex min-h-11 shrink-0 items-center px-1.5 transition md:min-h-0 ${
-                    selectedYear === null
-                      ? "text-book-gold"
-                      : "text-book-gold/40 hover:text-book-gold/70"
-                  }`}
-                >
-                  Todos
-                </button>
-                {years.map((year) => (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => onYearChange(year)}
-                    className={`inline-flex min-h-11 shrink-0 items-center px-1.5 transition md:min-h-0 ${
-                      selectedYear === year
-                        ? "text-book-gold underline decoration-book-gold/60 underline-offset-4"
-                        : "text-book-gold/45 hover:text-book-gold/75"
-                    }`}
-                  >
-                    {year}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={goNext}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-book-gold/70 transition hover:text-book-gold md:h-8 md:w-8"
-                aria-label="Próximo ano"
-              >
-                <ChevronRightIcon className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Título central */}
-          <div className="flex shrink-0 items-center justify-center gap-2 order-first sm:gap-2.5 md:order-none">
+          {/* Título central — fora do fluxo no desktop, oculto no mobile */}
+          <div className="pointer-events-none absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2 sm:gap-2.5 md:flex">
             <Image
               src="/Logo.png"
-              alt="Logo My Book Games"
+              alt=""
               width={36}
               height={36}
               className="h-8 w-8 object-contain sm:h-9 sm:w-9"
@@ -418,16 +415,63 @@ export default function LibraryHeader({
             </h1>
           </div>
 
-          {/* Ação à direita */}
-          <div className="flex w-full min-w-0 items-center justify-center md:w-auto md:flex-1 md:justify-end">
+          {/* Direita: Filtros (Mês/Ano) */}
+          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 md:gap-6 md:overflow-visible md:pb-0">
+            <div className="flex items-center gap-3">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  aria-label="Filtrar por mês"
+                  className="bg-transparent text-book-gold text-sm border-b border-book-gold/30 pb-1 focus:outline-none focus:border-book-gold cursor-pointer transition-colors"
+                >
+                  <option value="Todos" className="bg-book-bg">Mês</option>
+                  <option value="1" className="bg-book-bg">Janeiro</option>
+                  <option value="2" className="bg-book-bg">Fevereiro</option>
+                  <option value="3" className="bg-book-bg">Março</option>
+                  <option value="4" className="bg-book-bg">Abril</option>
+                  <option value="5" className="bg-book-bg">Maio</option>
+                  <option value="6" className="bg-book-bg">Junho</option>
+                  <option value="7" className="bg-book-bg">Julho</option>
+                  <option value="8" className="bg-book-bg">Agosto</option>
+                  <option value="9" className="bg-book-bg">Setembro</option>
+                  <option value="10" className="bg-book-bg">Outubro</option>
+                  <option value="11" className="bg-book-bg">Novembro</option>
+                  <option value="12" className="bg-book-bg">Dezembro</option>
+                </select>
+
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  aria-label="Filtrar por ano"
+                  className="bg-transparent text-book-gold text-sm border-b border-book-gold/30 pb-1 focus:outline-none focus:border-book-gold cursor-pointer transition-colors"
+                >
+                  <option value="Todos" className="bg-book-bg">Ano</option>
+                  <option value="2026" className="bg-book-bg">2026</option>
+                  <option value="2025" className="bg-book-bg">2025</option>
+                  <option value="2024" className="bg-book-bg">2024</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={onAddGame}
+                className="hidden md:flex min-h-11 shrink-0 items-center font-body text-sm text-book-gold/80 transition hover:text-book-gold md:min-h-0"
+              >
+                + Adicionar Novo Jogo
+              </button>
+            </div>
+
+            {/* FAB para Mobile */}
             <button
               type="button"
               onClick={onAddGame}
-              className="inline-flex min-h-11 shrink-0 items-center font-body text-sm text-book-gold/80 transition hover:text-book-gold md:min-h-0"
+              aria-label="Adicionar novo jogo"
+              className="md:hidden fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-book-gold text-book-bg shadow-[0_4px_12px_rgba(212,175,55,0.4)] transition-transform active:scale-95"
             >
-              + Adicionar Novo Jogo
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
             </button>
-          </div>
         </div>
       </header>
 
@@ -436,9 +480,30 @@ export default function LibraryHeader({
         onClose={() => setIsProfileOpen(false)}
         initialNickname={nickname}
         initialName={nickname}
+        initialPlatform={profilePlatform}
         initialAvatarUrl={portraitUrl}
         onAvatarChange={setPortraitUrl}
       />
+
+      {isFriendsModalOpen && (
+        <FriendsModal
+          isOpen={isFriendsModalOpen}
+          onClose={() => setIsFriendsModalOpen(false)}
+        />
+      )}
+
+      <NotificationsModal
+        isOpen={isNotificationsModalOpen}
+        onClose={() => setIsNotificationsModalOpen(false)}
+        onNotificationsUpdate={checkNotifications}
+      />
+
+      {isMessagesModalOpen && (
+        <MessagesModal
+          isOpen={isMessagesModalOpen}
+          onClose={() => setIsMessagesModalOpen(false)}
+        />
+      )}
 
       <LogoutModal
         open={isLogoutModalOpen}
@@ -477,10 +542,12 @@ export default function LibraryHeader({
                 <div className="flex flex-col items-center justify-center border border-book-gold/20 bg-book-gold/5 p-6 text-center transition-colors hover:bg-book-gold/10">
                   <Gamepad2 className="mb-3 h-8 w-8 text-book-gold opacity-80" />
                   <p className="mb-1 text-[10px] tracking-widest text-book-gold uppercase">
-                    Jogados em {currentYear}
+                    {timelineYear === "Todos"
+                      ? "Total de Jogos"
+                      : `Jogados em ${timelineYear}`}
                   </p>
                   <p className="font-display text-4xl text-book-paper">
-                    {totalGamesThisYear}
+                    {totalGames}
                   </p>
                 </div>
 
@@ -490,7 +557,7 @@ export default function LibraryHeader({
                     Finais Alcançados
                   </p>
                   <p className="font-display text-4xl text-book-paper">
-                    {clearedThisYear}
+                    {finishedGames}
                   </p>
                 </div>
 
@@ -500,9 +567,7 @@ export default function LibraryHeader({
                     Tempo de Jogo
                   </p>
                   <p className="font-display text-4xl text-book-paper">
-                    {totalPlaytimeThisYear > 0
-                      ? `${totalPlaytimeThisYear}h`
-                      : "0h"}
+                    {totalHours > 0 ? `${totalHours}h` : "0h"}
                   </p>
                 </div>
 
@@ -512,34 +577,52 @@ export default function LibraryHeader({
                     Em Andamento
                   </p>
                   <p className="font-display text-4xl text-book-paper">
-                    {totalGamesThisYear - clearedThisYear}
+                    {playingGames}
                   </p>
                 </div>
               </div>
 
               <div className="mb-6">
-                <h3 className="mb-8 flex items-center gap-3 border-b border-book-gold/20 pb-3 font-display text-xl tracking-widest text-book-gold uppercase sm:text-2xl">
-                  <Calendar className="h-6 w-6" /> Cronologia das Jornadas
-                </h3>
+                <div className="mb-8 flex items-center justify-between gap-4 border-b border-book-gold/30 pb-4">
+                  <h3 className="flex items-center gap-3 font-display text-xl tracking-widest text-book-gold uppercase sm:text-2xl">
+                    <Calendar className="h-6 w-6" /> Cronologia das Jornadas
+                  </h3>
+                  <select
+                    value={timelineYear}
+                    onChange={(e) => setTimelineYear(e.target.value)}
+                    aria-label="Filtrar cronologia por ano"
+                    className="bg-transparent text-book-gold text-sm border-b border-book-gold/30 pb-1 focus:outline-none focus:border-book-gold cursor-pointer transition-colors"
+                  >
+                    <option value="Todos" className="bg-book-bg">Todos os Anos</option>
+                    <option value="2026" className="bg-book-bg">2026</option>
+                    <option value="2025" className="bg-book-bg">2025</option>
+                    <option value="2024" className="bg-book-bg">2024</option>
+                  </select>
+                </div>
 
-                <div className="relative ml-4 space-y-12 border-l-2 border-book-gold/20 pl-8 sm:ml-6 sm:pl-10">
-                  {monthNames.map((month, idx) => {
-                    const monthGames = gamesByMonth[idx];
-                    if (!monthGames || monthGames.length === 0) return null;
+                <div className="relative ml-3 space-y-12 border-l border-book-gold/30 pb-8 md:ml-4">
+                  {sortedYears.map((year) => (
+                    <div key={year} className="relative">
+                      <div className="absolute top-0 -left-[31px] bg-book-bg px-2 py-1 md:-left-[33px]">
+                        <div className="rounded-full border border-book-gold/50 bg-book-bg px-3 py-1 font-display text-xs tracking-widest text-book-gold shadow-[0_0_10px_rgba(212,175,55,0.1)]">
+                          {year}
+                        </div>
+                      </div>
 
-                    return (
-                      <div
-                        key={month}
-                        className="animate-in slide-in-from-left-4 relative duration-500"
-                      >
-                        <div className="absolute top-1.5 -left-[41px] h-4 w-4 rounded-full border-2 border-book-gold bg-book-blue shadow-[0_0_10px_rgba(212,175,55,0.5)] sm:-left-[49px]" />
+                      <div className="space-y-10 pt-10">
+                        {Object.keys(timelineData[year]).map((month) => (
+                          <div
+                            key={`${year}-${month}`}
+                            className="relative pl-8 md:pl-12"
+                          >
+                            <div className="absolute top-1.5 -left-[5px] h-3 w-3 rounded-full border-2 border-book-gold bg-book-bg" />
 
-                        <h4 className="mb-6 font-display text-2xl text-book-gold">
-                          {month}
-                        </h4>
+                            <h4 className="mb-4 font-display text-xl text-book-gold">
+                              {month}
+                            </h4>
 
-                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                          {monthGames.map((game) => {
+                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                          {timelineData[year][month].map((game) => {
                             const start = game.sessionStart
                               ? new Date(game.sessionStart)
                               : new Date();
@@ -562,18 +645,7 @@ export default function LibraryHeader({
                                   const isMobile = window.innerWidth < 768;
                                   const itemsPerPage = isMobile ? 1 : 2;
 
-                                  const catalogYear =
-                                    selectedYear === null ||
-                                    selectedYear === game.year
-                                      ? selectedYear
-                                      : null;
-                                  const catalogGames =
-                                    catalogYear === null
-                                      ? (games ?? [])
-                                      : (games ?? []).filter(
-                                          (item) => item.year === catalogYear,
-                                        );
-                                  const gameIndex = catalogGames.findIndex(
+                                  const gameIndex = filteredGames.findIndex(
                                     (g) => g.id === game.id,
                                   );
 
@@ -666,14 +738,16 @@ export default function LibraryHeader({
                               </button>
                             );
                           })}
-                        </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
 
-                  {Object.keys(gamesByMonth).length === 0 && (
+                  {sortedYears.length === 0 && (
                     <p className="mt-4 text-sm text-book-paper/50 italic">
-                      Nenhuma jornada registrada neste ano ainda.
+                      Nenhuma jornada registrada neste período.
                     </p>
                   )}
                 </div>
