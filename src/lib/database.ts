@@ -66,6 +66,26 @@ export interface GameInsert {
   is_cleared: boolean;
 }
 
+/** Posição do Top 10 anual (`yearly_rankings.rank_position`). */
+export type RankPosition = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
+/** Linha da tabela `yearly_rankings`. */
+export interface YearlyRankingRow {
+  id: string;
+  user_id: string;
+  year: number;
+  rank_position: RankPosition;
+  game_id: string;
+  created_at: string;
+}
+
+export interface YearlyRankingInsert {
+  user_id: string;
+  year: number;
+  rank_position: RankPosition;
+  game_id: string;
+}
+
 /** Campos escritos no UPDATE de uma página já existente. */
 export interface GameUpdate {
   start_time: string | null;
@@ -98,6 +118,11 @@ export interface Database {
         Row: GameRow;
         Insert: GameInsert;
         Update: GameUpdate;
+      };
+      yearly_rankings: {
+        Row: YearlyRankingRow;
+        Insert: YearlyRankingInsert;
+        Update: Partial<Pick<YearlyRankingRow, "year" | "rank_position" | "game_id">>;
       };
     };
   };

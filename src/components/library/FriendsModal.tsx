@@ -20,24 +20,32 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
   }, [isOpen]);
 
   const fetchFriends = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Busca os amigos (pega as informações da tabela profiles juntando com friendships)
-    const { data, error } = await supabase
+    // Passo 1: busca os IDs dos amigos aceitos
+    const { data: friendships, error: fError } = await supabase
       .from("friendships")
-      .select(`
-        friend_id,
-        profiles!friendships_friend_id_fkey (
-          id, nickname, avatar_url, uid
-        )
-      `)
+      .select("friend_id")
       .eq("user_id", user.id)
       .eq("status", "accepted");
 
-    if (data && !error) {
-      setFriends(data.map((f) => f.profiles).filter(Boolean));
+    if (fError || !friendships?.length) {
+      setFriends([]);
+      return;
     }
+
+    // Passo 2: busca os perfis correspondentes
+    const friendIds = friendships.map((f) => f.friend_id as string);
+
+    const { data: profiles, error: pError } = await supabase
+      .from("profiles")
+      .select("id, nickname, name, avatar_url, uid")
+      .in("id", friendIds);
+
+    if (!pError) setFriends(profiles ?? []);
   };
 
   const handleAddFriend = async (e: React.FormEvent) => {
@@ -64,15 +72,23 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
       if (searchError || !friendProfile) throw new Error("Nenhum escritor encontrado com este UID.");
       if (friendProfile.id === user.id) throw new Error("Você não pode adicionar a si mesmo.");
 
-      // 2. Verifica se já são amigos
-      const { data: existingFriend } = await supabase
+      // 2. Verifica se já existe relação em QUALQUER direção (pendente ou aceita)
+      const { data: existingRelation, error: relError } = await supabase
         .from("friendships")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("friend_id", friendProfile.id)
-        .single();
+        .select("id, status")
+        .or(
+          `and(user_id.eq.${user.id},friend_id.eq.${friendProfile.id}),and(user_id.eq.${friendProfile.id},friend_id.eq.${user.id})`,
+        )
+        .maybeSingle();
 
-      if (existingFriend) throw new Error("Vocês já são amigos!");
+      if (relError) throw relError;
+      if (existingRelation) {
+        const msg =
+          existingRelation.status === "accepted"
+            ? "Vocês já fazem parte da mesma guilda!"
+            : "Já existe um pedido pendente entre vocês.";
+        throw new Error(msg);
+      }
 
       // Insere a amizade como pendente
       const { error: insertError } = await supabase
@@ -111,12 +127,12 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
           </svg>
         </button>
 
-        <div className="p-8 pb-6 border-b border-book-gold/20 shrink-0">
+        <div className="p-4 md:p-8 pb-6 border-b border-book-gold/20 shrink-0">
           <h2 className="font-display text-3xl text-book-gold mb-2">Amigos</h2>
           <p className="text-book-paper/60 text-sm">Adicione outros escritores pelo UID de 8 dígitos.</p>
         </div>
 
-        <div className="px-8 py-6 shrink-0">
+        <div className="px-4 md:px-8 py-6 shrink-0">
           <form onSubmit={handleAddFriend}>
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
               <input
@@ -142,12 +158,12 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
           </form>
         </div>
 
-        <div className="px-8 pb-8 flex-1 flex flex-col min-h-0">
+        <div className="px-4 md:px-8 pb-4 md:pb-8 flex-1 flex flex-col min-h-0">
           <h3 className="text-xs text-book-gold/80 uppercase tracking-widest mb-4 shrink-0">
             Sua Guilda ({friends.length})
           </h3>
 
-          <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-book-gold/20 scrollbar-track-transparent">
+          <div className="flex-1 overflow-y-auto pr-2 space-y-3">
             {friends.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-book-paper/40 opacity-70">
                 <svg className="w-16 h-16 mb-4 text-book-gold/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">

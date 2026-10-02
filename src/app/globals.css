@@ -144,6 +144,27 @@
   display: none;
 }
 
+/* Barra dourada em qualquer rolagem, inclusive modais com overflow-y-auto. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #C9A84C transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #C9A84C;
+  border-radius: 10px;
+  border: 2px solid #0F1C2E;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

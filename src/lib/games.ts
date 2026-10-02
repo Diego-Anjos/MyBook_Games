@@ -16,6 +16,41 @@ const MONTHS = [
   "Dez",
 ] as const;
 
+function genreNames(value: GameRow["genres"] | unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      if (typeof item === "string" && item.trim()) return [item.trim()];
+      if (item && typeof item === "object" && "name" in item) {
+        const name = (item as { name?: unknown }).name;
+        if (typeof name === "string" && name.trim()) return [name.trim()];
+      }
+      return [];
+    });
+  }
+
+  if (typeof value !== "string") return [];
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "{}") return [];
+
+  if (trimmed.startsWith("[")) {
+    try {
+      return genreNames(JSON.parse(trimmed) as unknown);
+    } catch {
+      return [];
+    }
+  }
+
+  const literal =
+    trimmed.startsWith("{") && trimmed.endsWith("}")
+      ? trimmed.slice(1, -1)
+      : trimmed;
+
+  return literal
+    .split(",")
+    .map((part) => part.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+}
+
 function asNumber(value: number | string | null | undefined): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -83,7 +118,7 @@ export function matchesSessionFilters(
 export function mapGameRow(row: GameRow): Game {
   const start = formatSession(row.start_time);
   const end = formatSession(row.end_time);
-  const genres = Array.isArray(row.genres) ? row.genres.filter(Boolean) : [];
+  const genres = genreNames(row.genres);
   const started = row.start_time ? new Date(row.start_time) : null;
   const sessionYear =
     started && !Number.isNaN(started.getTime())

@@ -119,7 +119,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
             <p className="font-display text-sm tracking-wide text-book-gold md:text-base">
               {game.developer}
             </p>
-            <p className="synopsis-scroll mt-1 max-h-10 overflow-y-auto pr-6 text-xs font-body leading-snug text-book-paper/80 md:mt-2 md:max-h-[4.5rem] md:text-sm md:leading-relaxed">
+            <p className="synopsis-scroll mt-1 max-h-10 overflow-y-auto pr-6 text-sm font-body leading-snug text-book-paper/80 md:mt-2 md:max-h-[4.5rem] md:text-sm md:leading-relaxed">
               {game.synopsis?.trim() || "Sinopse indisponível."}
             </p>
           </div>
@@ -161,7 +161,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
             aria-label="Ficha do jogo"
             className="w-full border border-book-gold/30 p-2 pr-16 md:min-w-0 md:flex-1 md:p-4 md:pr-4"
           >
-            <div className="flex flex-col gap-0.5 text-[11px] leading-tight">
+            <div className="flex flex-col gap-0.5 text-xs md:text-[11px] leading-tight">
               <p>
                 <span className="mr-2 font-display tracking-wider text-book-gold uppercase">
                   Título:
@@ -173,7 +173,9 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
                   Gênero:
                 </span>
                 <span className="text-book-paper/90">
-                  {game.genres.join(", ") || "Desconhecido"}
+                  {game.genres && game.genres.length > 0
+                    ? game.genres.join(", ")
+                    : "Desconhecido"}
                 </span>
               </p>
               <p>
@@ -232,7 +234,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
           <span className="mb-1 shrink-0 font-display text-[0.55rem] tracking-[0.18em] text-book-gold/50 uppercase">
             Narrativa
           </span>
-          <p className="font-body text-[0.7rem] leading-relaxed text-book-paper/75 italic md:text-xs md:leading-relaxed">
+          <p className="font-body text-sm leading-relaxed text-book-paper/75 italic md:text-xs md:leading-relaxed">
             {game.description}
           </p>
         </section>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchIgdbGames } from "@/lib/igdb/client";
+import { collectGenreNames, searchIgdbGames, translateGenre } from "@/lib/igdb/client";
 import type { IgdbSearchResult } from "@/lib/igdb/types";
 
 const TRANSLATE_CHUNK_SIZE = 450;
@@ -68,7 +68,12 @@ async function withPortugueseSummaries(
         translateField(game.storyline),
       ]);
 
-      return { ...game, summary, storyline };
+      return {
+        ...game,
+        summary,
+        storyline,
+        genres: [...new Set(collectGenreNames(game.genres).map(translateGenre))],
+      };
     }),
   );
 }

@@ -35,38 +35,62 @@ export default function NotificationsModal({ isOpen, onClose, onNotificationsUpd
   };
 
   const handleAccept = async (notificationId: string, senderId: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Atualiza o status para accepted
-    await supabase
-      .from("friendships")
-      .update({ status: "accepted" })
-      .eq("user_id", senderId)
-      .eq("friend_id", user.id);
+    try {
+      // 1. Atualiza a linha original de pending → accepted
+      const { error: updateError } = await supabase
+        .from("friendships")
+        .update({ status: "accepted" })
+        .eq("user_id", senderId)
+        .eq("friend_id", user.id);
 
-    // Envia notificação de aceitação de volta
-    await supabase.from("notifications").insert({
-      user_id: senderId,
-      sender_id: user.id,
-      type: "friend_accepted",
-    });
+      if (updateError) throw updateError;
 
-    markAsRead(notificationId);
+      // 2. Insere a linha REVERSA já aceita — corrige o bug de unidirecionalidade
+      //    (sem ela o remetente não enxerga o amigo na lista)
+      const { error: insertError } = await supabase
+        .from("friendships")
+        .insert({ user_id: user.id, friend_id: senderId, status: "accepted" });
+
+      // ignora conflito de chave única caso a linha já exista
+      if (insertError && insertError.code !== "23505") throw insertError;
+
+      // 3. Notifica o remetente que o convite foi aceito
+      await supabase.from("notifications").insert({
+        user_id: senderId,
+        sender_id: user.id,
+        type: "friend_accepted",
+      });
+
+      markAsRead(notificationId);
+    } catch (err: unknown) {
+      console.error("Erro ao aceitar pedido de amizade:", err);
+    }
   };
 
   const handleReject = async (notificationId: string, senderId: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Remove o pedido pendente
-    await supabase
-      .from("friendships")
-      .delete()
-      .eq("user_id", senderId)
-      .eq("friend_id", user.id);
+    try {
+      // Remove o pedido pendente
+      const { error } = await supabase
+        .from("friendships")
+        .delete()
+        .eq("user_id", senderId)
+        .eq("friend_id", user.id);
 
-    markAsRead(notificationId);
+      if (error) throw error;
+      markAsRead(notificationId);
+    } catch (err: unknown) {
+      console.error("Erro ao recusar pedido de amizade:", err);
+    }
   };
 
   const markAsRead = async (notificationId: string) => {
@@ -86,12 +110,12 @@ export default function NotificationsModal({ isOpen, onClose, onNotificationsUpd
           </svg>
         </button>
 
-        <div className="p-8 pb-6 border-b border-book-gold/20 shrink-0">
+        <div className="p-4 md:p-8 pb-6 border-b border-book-gold/20 shrink-0">
           <h2 className="font-display text-3xl text-book-gold mb-2">Mensageiros</h2>
           <p className="text-book-paper/60 text-sm">Cartas e convites de outros escritores.</p>
         </div>
 
-        <div className="px-8 py-6 flex-1 overflow-y-auto space-y-4">
+        <div className="px-4 md:px-8 py-6 flex-1 overflow-y-auto space-y-4">
           {notifications.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-book-paper/40">
               <p className="text-lg font-display text-book-gold/50">Nenhuma mensagem nova</p>

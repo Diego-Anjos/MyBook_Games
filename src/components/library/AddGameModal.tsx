@@ -80,6 +80,7 @@ function developerName(game: IgdbSearchResult): string | null {
 }
 
 function genreList(game: IgdbSearchResult): string[] {
+  if (!Array.isArray(game.genres)) return [];
   return [...new Set(game.genres.map((name) => name.trim()).filter(Boolean))];
 }
 
@@ -477,7 +478,7 @@ export default function AddGameModal({
                 ? "Nova Página"
                 : isEditing
                   ? "Revisão"
-                  : "Diário de sessão"}
+                  : "Livro de sessão"}
             </p>
             <h2 id={titleId} className="font-display text-2xl text-book-gold">
               {step === "search" && !isEditing
@@ -633,7 +634,7 @@ export default function AddGameModal({
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-book-gold/20 md:px-6 md:py-5">
+            <div className="flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-4 md:px-6 md:py-5">
               <div className="flex w-full flex-col gap-4 md:flex-row md:gap-6">
                 <label className="relative flex w-full flex-col gap-1.5">
                   <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
@@ -794,7 +795,7 @@ export default function AddGameModal({
               </label>
             </div>
 
-            <div className="shrink-0 space-y-3 border-t border-book-gold/20 px-6 py-4">
+            <div className="shrink-0 space-y-3 border-t border-book-gold/20 px-4 md:px-6 py-4 pb-6 md:pb-4">
               {formError ? (
                 <p
                   role="alert"
@@ -830,7 +831,7 @@ export default function AddGameModal({
 
     {showSuccessModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-300">
-          <div className="bg-book-blue border-2 border-book-gold/50 p-8 max-w-sm w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
+          <div className="bg-book-blue border-2 border-book-gold/50 p-5 md:p-8 max-w-sm w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
             <div className="absolute top-2 left-2 border-t border-l border-book-gold/50 w-4 h-4" />
             <div className="absolute top-2 right-2 border-t border-r border-book-gold/50 w-4 h-4" />
             <div className="absolute bottom-2 left-2 border-b border-l border-book-gold/50 w-4 h-4" />
@@ -843,7 +844,7 @@ export default function AddGameModal({
             </h2>
 
             <p className="font-body text-book-paper/80 text-sm leading-relaxed mb-6">
-              As memórias desta jornada foram atualizadas com sucesso no seu diário.
+              As memórias desta jornada foram atualizadas com sucesso no seu livro.
             </p>
 
             <button

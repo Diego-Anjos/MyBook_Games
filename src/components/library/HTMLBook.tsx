@@ -67,7 +67,7 @@ function EmptyPrefacePage() {
     <div className="flex h-full w-full flex-col items-center justify-center border border-book-gold/30 p-6 text-center md:p-8">
       <Feather className="mb-6 h-12 w-12 text-book-gold opacity-80" />
       <h2 className="mb-4 font-display text-3xl text-book-gold">
-        O Diário em Branco
+        O Livro em Branco
       </h2>
       <p className="max-w-sm font-body leading-relaxed text-book-paper/70">
         Todas as grandes jornadas começam com uma página em branco. Este é o
@@ -379,7 +379,7 @@ export default function HTMLBook({
 
       {gameToDelete && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in duration-300">
-          <div className="bg-book-blue border-2 border-red-900/50 p-8 max-w-sm w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
+          <div className="bg-book-blue border-2 border-red-900/50 p-5 md:p-8 max-w-sm w-full text-center relative shadow-2xl overflow-hidden flex flex-col items-center">
             <div className="absolute top-2 left-2 border-t border-l border-red-900/50 w-4 h-4" />
             <div className="absolute top-2 right-2 border-t border-r border-red-900/50 w-4 h-4" />
             <div className="absolute bottom-2 left-2 border-b border-l border-red-900/50 w-4 h-4" />
@@ -393,7 +393,7 @@ export default function HTMLBook({
                 </h2>
                 <p className="mb-8 font-body text-sm leading-relaxed text-book-paper/80">
                   Tem a certeza de que deseja apagar permanentemente estas
-                  memórias do seu diário? Esta ação não pode ser desfeita.
+                  memórias do seu livro? Esta ação não pode ser desfeita.
                 </p>
                 {deleteError ? (
                   <p role="alert" className="mb-4 font-body text-sm text-red-300">

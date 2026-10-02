@@ -581,7 +581,7 @@ function TermsModal({
                 Os Manuscritos Pessoais
               </h3>
               <p>
-                As resenhas, notas e narrativas que você registra neste diário
+                As resenhas, notas e narrativas que você registra neste livro
                 são de sua autoria e propriedade. O catálogo existe para
                 preservar a sua voz — não para reclamá-la.
               </p>
@@ -1283,7 +1283,7 @@ export default function AuthBook() {
             }}
             className="bg-book-gold text-book-blue font-display px-8 py-3 tracking-widest hover:bg-book-gold/90 transition-colors uppercase text-sm"
           >
-            Abrir o Diário
+            Abrir o Livro
           </button>
         </div>
       </div>

@@ -28,7 +28,7 @@ export type Game = {
   rating: number;
 };
 
-/** Ano de fundação do diário — início do filtro de anos. */
+/** Ano de fundação do livro — início do filtro de anos. */
 const DIARY_FOUNDING_YEAR = 2026;
 
 /** Anos do cabeçalho: da fundação até o ano atual do sistema. */

@@ -37,6 +37,9 @@ const GENRE_LABELS: Record<string, string> = {
   "Visual Novel": "Romance visual",
   Music: "Música",
   "Quiz/Trivia": "Quiz",
+  Indie: "Independente",
+  Arcade: "Fliperama",
+  "Point-and-click": "Apontar e clicar",
 };
 
 const releaseDateFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -46,8 +49,27 @@ const releaseDateFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "UTC",
 });
 
-function translateGenre(name: string): string {
+export function translateGenre(name: string): string {
   return GENRE_LABELS[name] ?? name;
+}
+
+/** Nomes de gênero da IGDB, em objeto `{ name }` ou texto. Empresas não entram aqui. */
+export function collectGenreNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const names = value.flatMap((genre) => {
+    if (typeof genre === "string") {
+      const name = genre.trim();
+      return name ? [name] : [];
+    }
+    if (genre && typeof genre === "object" && "name" in genre) {
+      const name = (genre as { name?: unknown }).name;
+      if (typeof name === "string" && name.trim()) return [name.trim()];
+    }
+    return [];
+  });
+
+  return [...new Set(names)];
 }
 
 function firstCompany(
@@ -125,11 +147,7 @@ limit ${Math.min(Math.max(limit, 1), 50)};
         ?.map((entry) => entry.company?.name?.trim())
         .filter((name): name is string => Boolean(name)) ?? [];
 
-    const genres =
-      game.genres
-        ?.map((entry) => entry.name?.trim())
-        .filter((name): name is string => Boolean(name))
-        .map(translateGenre) ?? [];
+    const genres = collectGenreNames(game.genres);
 
     const summary = game.summary?.trim() || null;
     const storyline = game.storyline?.trim() || null;

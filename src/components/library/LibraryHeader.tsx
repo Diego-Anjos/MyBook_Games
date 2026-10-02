@@ -7,7 +7,9 @@ import {
   Clock,
   Gamepad2,
   LogOut,
+  Medal,
   Menu,
+  Sparkles,
   Swords,
   Trophy,
   User,
@@ -17,6 +19,8 @@ import { FeatherIcon } from "@/components/icons";
 import FriendsModal from "@/components/library/FriendsModal";
 import MessagesModal from "@/components/library/MessagesModal";
 import NotificationsModal from "@/components/library/NotificationsModal";
+import ArchivistModal from "@/components/library/ArchivistModal";
+import RankingModal from "@/components/library/RankingModal";
 import UserProfileModal from "@/components/library/UserProfileModal";
 import type { Game } from "@/data/mock-games";
 import { supabase } from "@/lib/supabase";
@@ -93,7 +97,7 @@ function LogoutModal({
       <div
         className="
           relative z-10 flex w-[90%] max-w-md flex-col items-center
-          bg-book-paper p-8 text-center shadow-2xl
+          bg-book-paper p-4 md:p-8 text-center shadow-2xl
         "
       >
         <div
@@ -115,7 +119,7 @@ function LogoutModal({
             id="logout-modal-title"
             className="mb-3 font-display text-3xl text-book-blue"
           >
-            Fechar o diário?
+            Fechar o livro?
           </h2>
           <p className="mb-8 font-body text-book-blue/80">
             As páginas do seu catálogo aguardarão em segurança até a sua próxima
@@ -167,6 +171,8 @@ export default function LibraryHeader({
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isRankingModalOpen, setIsRankingModalOpen] = useState(false);
+  const [isArchivistModalOpen, setIsArchivistModalOpen] = useState(false);
   const [portraitUrl, setPortraitUrl] = useState(avatarUrl ?? "");
   const [profilePlatform, setProfilePlatform] = useState("PC");
   const [timelineYear, setTimelineYear] = useState("Todos");
@@ -224,6 +230,18 @@ export default function LibraryHeader({
   const totalHours = modalFilteredGames.reduce((acc, game) => {
     return acc + (game.playtimeHours || 0);
   }, 0);
+
+  // Anos com histórico real, extraídos dos jogos carregados (decrescente)
+  const availableYears = Array.from(
+    new Set(
+      filteredGames.flatMap((game) => {
+        const iso = game.sessionStart || game.sessionEnd;
+        if (!iso) return [];
+        const year = new Date(iso).getFullYear();
+        return Number.isNaN(year) ? [] : [year.toString()];
+      }),
+    ),
+  ).sort((a, b) => Number(b) - Number(a));
 
   const sortedGames = [...modalFilteredGames].sort((a, b) => {
     const dateA = new Date(a.sessionStart || a.sessionEnd || 0).getTime();
@@ -289,10 +307,36 @@ export default function LibraryHeader({
                               setIsMenuOpen(false);
                               setIsStatusModalOpen(true);
                             }}
-                            className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-book-paper transition-colors hover:bg-book-gold/10 hover:text-book-gold"
+                            className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-book-gold transition-colors hover:bg-book-gold/10"
                           >
                             <Trophy className="h-4 w-4" />
                             Status do Escritor
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsRankingModalOpen(true);
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-book-gold transition-colors hover:bg-book-gold/10"
+                          >
+                            <Medal className="h-4 w-4" />
+                            Ranking
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsArchivistModalOpen(true);
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-book-gold transition-colors hover:bg-book-gold/10"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            O Arquivista
                           </button>
                         </li>
                         <li>
@@ -515,13 +559,21 @@ export default function LibraryHeader({
         }}
       />
 
+      {isRankingModalOpen ? (
+        <RankingModal onClose={() => setIsRankingModalOpen(false)} />
+      ) : null}
+
+      {isArchivistModalOpen ? (
+        <ArchivistModal onClose={() => setIsArchivistModalOpen(false)} />
+      ) : null}
+
       {isStatusModalOpen && (
         <div className="animate-in fade-in fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 px-4 py-8 backdrop-blur-md duration-500 sm:px-8">
           <div className="relative flex h-full max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-sm border-2 border-book-gold/40 bg-book-blue shadow-2xl">
             <div className="relative flex items-center justify-between overflow-hidden border-b border-book-gold/20 bg-book-blue-light/50 p-6 sm:p-10">
               <div className="relative z-10">
                 <h2 className="mb-1 font-display text-3xl tracking-widest text-book-gold uppercase sm:text-4xl">
-                  O Tomo das Jornadas
+                  A Crônica das Jornadas
                 </h2>
                 <p className="font-body text-sm text-book-paper/60">
                   Sua retrospectiva de memórias e conquistas
@@ -537,7 +589,7 @@ export default function LibraryHeader({
               </button>
             </div>
 
-            <div className="custom-scrollbar flex-1 overflow-y-auto p-6 font-body sm:p-10">
+            <div className="flex-1 overflow-y-auto p-6 font-body sm:p-10">
               <div className="mb-12 grid grid-cols-2 gap-4 md:grid-cols-4">
                 <div className="flex flex-col items-center justify-center border border-book-gold/20 bg-book-gold/5 p-6 text-center transition-colors hover:bg-book-gold/10">
                   <Gamepad2 className="mb-3 h-8 w-8 text-book-gold opacity-80" />
@@ -594,9 +646,11 @@ export default function LibraryHeader({
                     className="bg-transparent text-book-gold text-sm border-b border-book-gold/30 pb-1 focus:outline-none focus:border-book-gold cursor-pointer transition-colors"
                   >
                     <option value="Todos" className="bg-book-bg">Todos os Anos</option>
-                    <option value="2026" className="bg-book-bg">2026</option>
-                    <option value="2025" className="bg-book-bg">2025</option>
-                    <option value="2024" className="bg-book-bg">2024</option>
+                    {availableYears.map((year) => (
+                      <option key={year} value={year} className="bg-book-bg">
+                        {year}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

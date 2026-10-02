@@ -25,9 +25,10 @@ build/
 dist/
 
 # -----------------------------------------------------------------------------
-# Variáveis de ambiente (nunca versionar segredos)
-# Cobre: .env, .env.local, .env.development, .env.production, etc.
-# Mantém .env.example versionado como template
+# Variáveis de ambiente (nunca versionar segredos) ⚠️  CRÍTICO
+# A wildcard .env.* cobre explicitamente:
+#   .env.local | .env.development.local | .env.test.local | .env.production.local
+# Mantém .env.example versionado como template público
 # -----------------------------------------------------------------------------
 .env
 .env.*
@@ -90,10 +91,14 @@ coverage/
 .vercel
 
 # -----------------------------------------------------------------------------
-# IDEs / editores (opcional — descomente se preferir não versionar)
+# IDEs / editores
+# .vscode/ e .cursor/ contêm configurações locais do desenvolvedor que
+# não devem ser versionadas em projetos solo (sem config compartilhada de equipe).
+# .idea/ cobre o IntelliJ / WebStorm / Rider etc.
 # -----------------------------------------------------------------------------
-# .idea/
-# .vscode/
-# *.swp
-# *.swo
-# *~
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+*~
