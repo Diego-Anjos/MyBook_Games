@@ -106,7 +106,7 @@ export default function NotificationsModal({ isOpen, onClose, onNotificationsUpd
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-book-bg border border-book-gold/30 rounded-lg w-full max-w-lg md:max-w-xl min-h-[400px] flex flex-col overflow-hidden shadow-2xl relative">
+      <div className="bg-book-bg border border-book-gold/30 rounded-lg w-full max-w-lg md:max-w-xl min-h-[400px] max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative">
         <button onClick={onClose} className="absolute top-6 right-6 text-book-gold/60 hover:text-book-gold">
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

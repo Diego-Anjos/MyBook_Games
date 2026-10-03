@@ -42,7 +42,7 @@ function formatRating(rating: number): string {
 
 export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
   return (
-    <article className="relative flex h-full w-full flex-col bg-book-blue p-4 sm:p-6 md:p-8">
+    <article className="relative flex h-full w-full flex-col overflow-hidden bg-book-blue p-4 sm:p-6 md:p-8">
       <CornerOrnament className="top-1.5 left-1.5 border-t border-l" />
       <CornerOrnament className="top-1.5 right-1.5 border-t border-r" />
       <CornerOrnament className="bottom-1.5 left-1.5 border-b border-l" />
@@ -229,12 +229,12 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
 
         <section
           aria-label="Comentários"
-          className="synopsis-scroll mt-2 md:mt-3 flex min-h-[5rem] shrink-0 flex-col border border-book-gold/25 bg-book-blue-light/25 px-2.5 py-2 md:min-h-0 md:shrink md:flex-1 md:max-h-none md:overflow-y-auto md:px-3 md:py-2.5"
+          className="synopsis-scroll mt-2 md:mt-3 flex max-h-[120px] sm:max-h-[180px] shrink-0 flex-col overflow-y-auto border border-book-gold/25 bg-book-blue-light/25 px-2.5 py-2 md:min-h-0 md:shrink md:flex-1 md:max-h-none md:px-3 md:py-2.5"
         >
           <span className="mb-1 shrink-0 font-display text-[0.55rem] tracking-[0.18em] text-book-gold/50 uppercase">
             Narrativa
           </span>
-          <p className="font-body text-sm leading-relaxed text-book-paper/75 italic md:text-xs md:leading-relaxed">
+          <p className="break-words font-body text-sm leading-relaxed text-book-paper/75 italic md:text-xs md:leading-relaxed">
             {game.description}
           </p>
         </section>

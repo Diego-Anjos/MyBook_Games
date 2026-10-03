@@ -11,6 +11,7 @@ export default function BookLayout({
     <div
       className="
         relative flex min-h-screen w-full items-start justify-center
+        overflow-x-hidden
         p-0 md:items-center md:px-6 md:py-10
         bg-[url('/background.png')] bg-cover bg-center bg-no-repeat
         bg-scroll md:bg-fixed
