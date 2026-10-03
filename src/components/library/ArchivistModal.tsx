@@ -356,7 +356,6 @@ export default function ArchivistModal({ onClose }: ArchivistModalProps) {
       setGenres([]);
       setPlatforms([]);
       setRatings([]);
-      setQuickStats(EMPTY_STATS);
     }
 
     async function load() {

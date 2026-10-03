@@ -354,7 +354,6 @@ export default function OracleModal({ onClose }: OracleModalProps) {
       setGenres([]);
       setPlatforms([]);
       setRatings([]);
-      setQuickStats(EMPTY_STATS);
     }
 
     async function load() {
