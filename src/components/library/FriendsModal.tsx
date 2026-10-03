@@ -174,7 +174,7 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
             Sua Guilda ({friends.length})
           </h3>
 
-          <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+          <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y pr-2 space-y-3">
             {friends.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-book-paper/40 opacity-70">
                 <svg className="w-16 h-16 mb-4 text-book-gold/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">

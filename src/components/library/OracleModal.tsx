@@ -473,7 +473,7 @@ export default function OracleModal({ onClose }: OracleModalProps) {
         onClick={onClose}
       />
 
-      <div className="relative z-10 flex max-h-[85vh] w-full max-w-6xl flex-col overflow-y-auto border-2 border-[#C9A84C]/40 bg-[#0F1C2E] text-[#C9A84C] shadow-2xl">
+      <div className="relative z-10 flex max-h-[85vh] w-full max-w-6xl flex-col overflow-y-auto overscroll-contain touch-pan-y border-2 border-[#C9A84C]/40 bg-[#0F1C2E] text-[#C9A84C] shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#C9A84C]/20 bg-[#0F1C2E] px-6 py-6 sm:px-10">
           <div>
             <h2

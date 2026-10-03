@@ -187,7 +187,7 @@ export default function FriendBookModal({ open, onClose, friend }: FriendBookMod
         </div>
 
         {/* Corpo */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-6">
           {loading ? (
             <div className="flex h-40 items-center justify-center">
               <p className="animate-pulse font-display text-lg text-book-gold/50">

@@ -118,7 +118,7 @@ export default function NotificationsModal({ isOpen, onClose, onNotificationsUpd
           <p className="text-book-paper/60 text-sm">Cartas e convites de outros escritores.</p>
         </div>
 
-        <div className="px-4 md:px-8 py-6 flex-1 overflow-y-auto space-y-4">
+        <div className="px-4 md:px-8 py-6 flex-1 overflow-y-auto overscroll-contain touch-pan-y space-y-4">
           {notifications.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-book-paper/40">
               <p className="text-lg font-display text-book-gold/50">Nenhuma mensagem nova</p>

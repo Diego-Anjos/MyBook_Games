@@ -525,7 +525,7 @@ export default function AddGameModal({
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col">
 
         {step === "search" && !isEditing ? (
           <>
@@ -560,7 +560,7 @@ export default function AddGameModal({
               </p>
             </div>
 
-            <div className="relative z-10 flex-1 overflow-y-auto hide-scrollbar px-4 py-4">
+            <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain touch-pan-y hide-scrollbar px-4 py-4">
               {isLoading ? (
                 <p className="py-10 text-center font-body text-sm tracking-wide text-book-gold/55 italic">
                   Consultando os arquivos…
@@ -662,7 +662,7 @@ export default function AddGameModal({
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-4 pb-8 md:px-6 md:py-5 md:pb-6">
+            <div className="flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y p-4 pb-8 md:px-6 md:py-5 md:pb-6">
               <div className="flex w-full flex-col gap-4 md:flex-row md:gap-6">
                 <label className="relative flex w-full flex-col gap-1.5">
                   <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">

@@ -154,7 +154,7 @@ export default function MessagesModal({ isOpen, onClose, onMessageRead }: Messag
               </svg>
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y">
             {friends.length === 0 ? (
               <p className="text-xs text-book-paper/40 p-4 text-center">Nenhum amigo na guilda ainda.</p>
             ) : (
@@ -227,7 +227,7 @@ export default function MessagesModal({ isOpen, onClose, onMessageRead }: Messag
               </div>
 
               {/* Mensagens */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-6 space-y-4">
                 {messages.map((msg, idx) => {
                   const isMine = msg.sender_id === currentUser.id;
                   return (

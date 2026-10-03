@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Medal, X } from "lucide-react";
 import type { RankPosition, YearlyRankingRow } from "@/lib/database";
@@ -47,6 +47,7 @@ function emptySlots(): (FilledSlot | null)[] {
 
 export default function RankingModal({ onClose }: RankingModalProps) {
   const titleId = useId();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [year, setYear] = useState<number | null>(null);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [games, setGames] = useState<DiaryGame[]>([]);
@@ -157,6 +158,11 @@ export default function RankingModal({ onClose }: RankingModalProps) {
     return () => {
       active = false;
     };
+  }, [year]);
+
+  // Volta ao topo da lista sempre que o filtro de ano muda
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [year]);
 
   const takenIds = useMemo(() => {
@@ -344,7 +350,7 @@ export default function RankingModal({ onClose }: RankingModalProps) {
           </p>
         ) : null}
 
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6 md:px-10">
+        <div ref={scrollRef} className="max-h-[60vh] space-y-3 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4 sm:px-8 sm:py-6 md:px-10">
           {loading ? (
             <p className="py-10 text-center font-body text-book-gold/50">
               Consultando o ranking…
@@ -432,7 +438,7 @@ export default function RankingModal({ onClose }: RankingModalProps) {
                           Nenhum jogo com esse título.
                         </p>
                       ) : (
-                        <ul className="mt-2 max-h-48 overflow-y-auto border border-book-gold/20 bg-book-blue">
+                        <ul className="mt-2 max-h-48 overflow-y-auto overscroll-contain touch-pan-y border border-book-gold/20 bg-book-blue">
                           {visibleGames.map((game) => (
                             <li key={game.id}>
                               <button
