@@ -125,7 +125,7 @@ export default function Library({ userName }: LibraryProps) {
           className="pointer-events-none absolute inset-3 border border-book-gold/30 md:inset-4"
         />
 
-        <div className="relative z-10 flex flex-col gap-3 p-3 md:gap-6 md:p-10">
+        <div className="relative z-10 flex flex-col gap-3 p-3 md:gap-6 md:p-10 lg:p-12">
           <LibraryHeader
             selectedMonth={selectedMonth}
             setSelectedMonth={setSelectedMonth}

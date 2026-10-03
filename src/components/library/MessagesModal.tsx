@@ -7,9 +7,11 @@ import Image from "next/image";
 interface MessagesModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Chamado sempre que mensagens são marcadas como lidas, para o menu atualizar o badge. */
+  onMessageRead?: () => void;
 }
 
-export default function MessagesModal({ isOpen, onClose }: MessagesModalProps) {
+export default function MessagesModal({ isOpen, onClose, onMessageRead }: MessagesModalProps) {
   const [friends, setFriends] = useState<any[]>([]);
   const [selectedFriend, setSelectedFriend] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -41,6 +43,8 @@ export default function MessagesModal({ isOpen, onClose }: MessagesModalProps) {
   useEffect(() => {
     if (selectedFriend && currentUser) {
       fetchMessages();
+      // Marca as mensagens do contato como lidas ao abrir a conversa
+      void markMessagesAsRead(selectedFriend.id);
 
       // Inscreve no canal realtime para receber mensagens instantaneamente
       const channel = supabase.channel(`chat-${currentUser.id}-${selectedFriend.id}`)
@@ -51,6 +55,10 @@ export default function MessagesModal({ isOpen, onClose }: MessagesModalProps) {
             (newMsg.sender_id === selectedFriend.id && newMsg.receiver_id === currentUser.id)
           ) {
             setMessages((prev) => (prev.some((msg) => msg.id === newMsg.id) ? prev : [...prev, newMsg]));
+            // Se a mensagem chegou do contato selecionado, marca-a como lida imediatamente
+            if (newMsg.sender_id === selectedFriend.id && newMsg.receiver_id === currentUser.id) {
+              void markMessagesAsRead(selectedFriend.id);
+            }
           }
         })
         .subscribe();
@@ -83,6 +91,23 @@ export default function MessagesModal({ isOpen, onClose }: MessagesModalProps) {
     if (data && !error) setMessages(data);
   };
 
+  // Marca todas as mensagens do contato selecionado como lidas (read = true)
+  // e notifica o menu para atualizar o badge imediatamente.
+  const markMessagesAsRead = async (friendId: string) => {
+    if (!currentUser) return;
+    const { error } = await supabase
+      .from("messages")
+      .update({ read: true })
+      .eq("receiver_id", currentUser.id)
+      .eq("sender_id", friendId)
+      .eq("read", false);
+
+    // Só dispara o callback se o UPDATE foi bem-sucedido e havia algo a marcar
+    if (!error) {
+      onMessageRead?.();
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedFriend || !currentUser) return;
@@ -91,10 +116,12 @@ export default function MessagesModal({ isOpen, onClose }: MessagesModalProps) {
     setNewMessage("");
     setSendError("");
 
+    // Colunas da tabela: id (auto), sender_id, receiver_id, content, read, created_at (auto)
     const { data, error } = await supabase.from("messages").insert({
       sender_id: currentUser.id,
       receiver_id: selectedFriend.id,
       content: msgContent,
+      read: false,
     }).select().single();
 
     if (error || !data) {

@@ -277,7 +277,7 @@ export default function HTMLBook({
 
   return (
     <div className="flex w-full flex-col items-center gap-2 pb-8 sm:gap-5 md:pb-0">
-      <div className="w-full max-w-5xl">
+      <div className="w-full max-w-5xl lg:max-w-6xl mx-auto">
         <FlipBook
           key={bookKey}
           ref={bookRef}

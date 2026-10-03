@@ -105,7 +105,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
               alt={`Capa de ${game.title}`}
               fill
               sizes="(max-width: 768px) 100vw, 180px"
-              className="object-contain object-center"
+              className="h-full w-full object-cover object-center"
             />
           </div>
 

@@ -168,6 +168,7 @@ export default function LibraryHeader({
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [isMessagesModalOpen, setIsMessagesModalOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -188,8 +189,34 @@ export default function LibraryHeader({
     setHasUnread((count || 0) > 0);
   };
 
+  const checkUnreadMessages = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { count } = await supabase
+      .from("messages")
+      .select("*", { count: "exact", head: true })
+      .eq("receiver_id", user.id)
+      .eq("read", false);
+    setUnreadMessagesCount(count ?? 0);
+  };
+
   useEffect(() => {
     checkNotifications();
+    void checkUnreadMessages();
+  }, []);
+
+  // Realtime: atualiza o badge de mensagens em tempo real
+  useEffect(() => {
+    const channel = supabase
+      .channel("header-unread-messages")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+        void checkUnreadMessages();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => {
+        void checkUnreadMessages();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   useEffect(() => {
@@ -381,12 +408,19 @@ export default function LibraryHeader({
                               setIsMenuOpen(false);
                               setIsMessagesModalOpen(true);
                             }}
-                            className="w-full text-left px-4 py-2 text-book-gold hover:bg-book-gold/10 transition-colors flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-book-gold hover:bg-book-gold/10 transition-colors flex items-center justify-between"
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                            </svg>
-                            Mensagens
+                            <div className="flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                              </svg>
+                              Mensagens
+                            </div>
+                            {unreadMessagesCount > 0 && (
+                              <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                                {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                              </span>
+                            )}
                           </button>
                         </li>
                       </ul>
@@ -545,7 +579,11 @@ export default function LibraryHeader({
       {isMessagesModalOpen && (
         <MessagesModal
           isOpen={isMessagesModalOpen}
-          onClose={() => setIsMessagesModalOpen(false)}
+          onClose={() => {
+            setIsMessagesModalOpen(false);
+            void checkUnreadMessages();
+          }}
+          onMessageRead={() => void checkUnreadMessages()}
         />
       )}
 

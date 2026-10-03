@@ -60,11 +60,14 @@ export default function NotificationsModal({ isOpen, onClose, onNotificationsUpd
       if (insertError && insertError.code !== "23505") throw insertError;
 
       // 3. Notifica o remetente que o convite foi aceito
-      await supabase.from("notifications").insert({
+      const { error: notifError } = await supabase.from("notifications").insert({
         user_id: senderId,
         sender_id: user.id,
         type: "friend_accepted",
+        content: "aceitou seu pedido para entrar na guilda!",
       });
+
+      if (notifError) console.error("Erro ao criar notificação de aceitação:", notifError);
 
       markAsRead(notificationId);
     } catch (err: unknown) {

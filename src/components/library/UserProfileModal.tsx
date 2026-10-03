@@ -149,7 +149,12 @@ export default function UserProfileModal({
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [uidCopied, setUidCopied] = useState(false);
   const [uid, setUid] = useState("");
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Sync when modal opens with fresh props
   useEffect(() => {
@@ -262,7 +267,7 @@ export default function UserProfileModal({
       onAvatarChange?.(data.publicUrl);
     } catch (error) {
       console.error("Erro ao fazer upload da imagem:", error);
-      alert("Erro ao enviar a imagem. Tente novamente.");
+      setInlineError("Erro ao enviar a imagem. Tente novamente.");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -305,7 +310,7 @@ export default function UserProfileModal({
       setCoverUrl(data.publicUrl);
     } catch (error) {
       console.error("Erro ao fazer upload da capa:", error);
-      alert("Erro ao enviar a capa. Tente novamente.");
+      setInlineError("Erro ao enviar a capa. Tente novamente.");
     } finally {
       setIsCoverUploading(false);
       if (coverInputRef.current) coverInputRef.current.value = "";
@@ -329,13 +334,51 @@ export default function UserProfileModal({
 
     if (error) {
       console.error("Erro ao remover o retrato:", error);
-      alert("Erro ao remover a imagem. Tente novamente.");
+      setInlineError("Erro ao remover a imagem. Tente novamente.");
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (isDeleting) return;
+    setDeleteError(null);
+    setIsDeleting(true);
+
+    try {
+      // Obtém o access token para passar no header Authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          (body as { error?: string }).error ||
+            "Não foi possível apagar a narrativa.",
+        );
+      }
+
+      // Sucesso: desloga localmente e redireciona para a home
+      await supabase.auth.signOut();
+      window.location.href = "/";
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Erro desconhecido.";
+      setDeleteError(message);
+      setIsDeleting(false);
     }
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (saving) return;
+    setInlineError(null);
     setSaving(true);
 
     try {
@@ -343,14 +386,14 @@ export default function UserProfileModal({
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        alert("Sessão expirada. Faça login novamente.");
+        setInlineError("Sessão expirada. Faça login novamente.");
         return;
       }
       console.log("========== INICIANDO ATUALIZAÇÃO DO PERFIL ==========");
 
       if (password) {
         if (password !== confirmPassword) {
-          alert("As novas senhas não coincidem.");
+          setInlineError("As novas senhas não coincidem.");
           return;
         }
 
@@ -360,7 +403,7 @@ export default function UserProfileModal({
 
         if (passwordError) {
           console.error("Erro ao atualizar senha:", passwordError);
-          alert("Erro ao atualizar senha: " + passwordError.message);
+          setInlineError("Erro ao atualizar senha: " + passwordError.message);
           return;
         }
         console.log("Senha atualizada com sucesso no Auth.");
@@ -382,7 +425,7 @@ export default function UserProfileModal({
 
       if (profileError) {
         console.error("Erro ao atualizar tabela profiles:", profileError);
-        alert("Erro ao salvar os dados do perfil: " + profileError.message);
+        setInlineError("Erro ao salvar os dados do perfil: " + profileError.message);
         return;
       }
       console.log("Dados do perfil atualizados com sucesso.");
@@ -612,13 +655,19 @@ export default function UserProfileModal({
                     type="button"
                     onClick={() => {
                       if (uid) {
-                        navigator.clipboard.writeText(uid);
-                        alert("UID copiado para a área de transferência!");
+                        navigator.clipboard.writeText(uid)
+                          .then(() => {
+                            setUidCopied(true);
+                            setTimeout(() => setUidCopied(false), 2000);
+                          })
+                          .catch(() => {
+                            setInlineError("Não foi possível copiar o UID.");
+                          });
                       }
                     }}
-                    className="text-[10px] text-book-gold hover:text-white underline tracking-wider"
+                    className="text-[10px] text-book-gold hover:text-white underline tracking-wider transition-colors"
                   >
-                    Copiar
+                    {uidCopied ? "Copiado!" : "Copiar"}
                   </button>
                 </div>
               </div>
@@ -695,8 +744,18 @@ export default function UserProfileModal({
             />
           </div>
 
+          {/* Mensagem de erro inline */}
+          {inlineError ? (
+            <p
+              role="alert"
+              className="mx-6 mt-4 border border-red-500/40 bg-red-900/20 px-4 py-3 font-body text-sm text-red-400 sm:mx-10"
+            >
+              {inlineError}
+            </p>
+          ) : null}
+
           {/* Ações */}
-          <div className="mt-8 flex shrink-0 flex-col items-center gap-4 px-6 pb-8 sm:mt-10 sm:flex-row sm:justify-between sm:px-10 sm:pb-10">
+          <div className="mt-8 flex shrink-0 flex-col items-center gap-4 px-6 pb-4 sm:mt-10 sm:flex-row sm:justify-between sm:px-10">
             <button
               type="button"
               onClick={onClose}
@@ -727,6 +786,26 @@ export default function UserProfileModal({
               {saving ? "Gravando..." : "Salvar Registros"}
             </button>
           </div>
+
+          {/* Zona de perigo — Apagar conta */}
+          <div className="flex justify-center pb-8 sm:pb-10">
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError(null);
+                setIsDeleteModalOpen(true);
+              }}
+              disabled={saving}
+              className="
+                font-body text-sm text-red-500/70
+                underline decoration-red-500/25 underline-offset-4
+                transition hover:text-red-600 hover:decoration-red-500/50
+                disabled:opacity-40
+              "
+            >
+              Apagar Narrativa
+            </button>
+          </div>
         </form>
 
         {isSuccess && (
@@ -739,6 +818,106 @@ export default function UserProfileModal({
               </div>
               <h3 className="font-display text-book-gold text-2xl mb-1">Registros Atualizados</h3>
               <p className="text-book-paper/80 text-sm">A sua ficha foi reescrita com sucesso.</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Modal de confirmação: Queimar o Livro? ── */}
+        {isDeleteModalOpen && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center rounded-sm bg-black/80 p-6 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="relative flex w-full max-w-sm flex-col items-center text-center">
+              {/* Ícone de chama */}
+              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-800/60 bg-red-950/50">
+                <svg
+                  className="h-8 w-8 text-red-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"
+                  />
+                </svg>
+              </div>
+
+              <h3 className="mb-4 font-display text-2xl tracking-wide text-red-700 sm:text-3xl">
+                Queimar o Livro?
+              </h3>
+
+              <p className="mb-6 font-body text-sm leading-relaxed text-book-paper/75">
+                Você está prestes a lançar seu livro às chamas. Todas as suas
+                resenhas, conquistas, mensagens e elos de guilda virarão cinzas
+                e sumirão para sempre. Esta ação é definitiva e não tem volta.{" "}
+                <span className="font-semibold text-book-paper/90">
+                  Deseja realmente queimar a sua narrativa?
+                </span>
+              </p>
+
+              {/* Erro de exclusão */}
+              {deleteError && (
+                <p
+                  role="alert"
+                  className="mb-4 w-full border border-red-700/40 bg-red-900/30 px-4 py-2 font-body text-sm text-red-400"
+                >
+                  {deleteError}
+                </p>
+              )}
+
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setDeleteError(null);
+                  }}
+                  disabled={isDeleting}
+                  className="
+                    inline-flex min-h-10 items-center justify-center px-6 py-2
+                    font-body text-sm text-book-paper/70
+                    underline decoration-book-paper/25 underline-offset-4
+                    transition hover:text-book-paper hover:decoration-book-paper/50
+                    disabled:opacity-50
+                  "
+                >
+                  Preservar Livro
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAccount()}
+                  disabled={isDeleting}
+                  className="
+                    inline-flex min-h-10 min-w-[10rem] items-center justify-center gap-2
+                    bg-red-800 px-6 py-2
+                    font-display text-sm tracking-wide text-white
+                    shadow-[0_4px_16px_rgba(153,27,27,0.5)]
+                    transition hover:bg-red-700
+                    disabled:cursor-wait disabled:opacity-70
+                  "
+                >
+                  {isDeleting ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Queimando...
+                    </>
+                  ) : (
+                    "Queimar Narrativa"
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

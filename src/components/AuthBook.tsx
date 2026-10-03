@@ -464,6 +464,19 @@ function AuthNotice({ message }: { message: string | null }) {
   );
 }
 
+function AuthSuccess({ message }: { message: string | null }) {
+  if (!message) return null;
+
+  return (
+    <p
+      role="status"
+      className="rounded-sm bg-book-paper px-3 py-2 text-center font-body text-sm leading-snug text-green-800/80"
+    >
+      {message}
+    </p>
+  );
+}
+
 function BookLoadingPlaceholder() {
   return (
     <div
@@ -572,8 +585,9 @@ function TermsModal({
 
           <div className="space-y-4 font-body leading-relaxed text-book-blue/80">
             <p>
-              Bem-vindo à My Book Games. Este catálogo é o seu refúgio pessoal
-              para guardar memórias de jogatinas passadas e futuras.
+              Bem-vindo ao My Book Games. Este tomo é o seu refúgio pessoal
+              para registrar as memórias das suas maiores jornadas, passadas e
+              futuras.
             </p>
 
             <section>
@@ -581,21 +595,34 @@ function TermsModal({
                 Os Manuscritos Pessoais
               </h3>
               <p>
-                As resenhas, notas e narrativas que você registra neste livro
-                são de sua autoria e propriedade. O catálogo existe para
+                As resenhas, rankings e narrativas que você registra neste livro
+                são de sua inteira autoria e propriedade. O catálogo existe para
                 preservar a sua voz — não para reclamá-la.
               </p>
             </section>
 
             <section>
               <h3 className="mb-2 font-display text-lg text-book-blue">
-                O Silêncio da Biblioteca
+                A Guilda de Escritores
               </h3>
               <p>
-                Use a plataforma com respeito: guarde apenas o que for seu,
-                evite abusos e trate este espaço como um salão de leitura —
-                tranquilo, pessoal e dedicado às histórias que você escolhe
-                contar.
+                Ao compartilhar seu UID e convidar outros viajantes para a sua
+                guilda, aja com honra. Mantenha o respeito e trate este espaço
+                compartilhado como um salão de leitura — tranquilo e dedicado
+                às histórias que escolhemos contar.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="mb-2 font-display text-lg text-book-blue">
+                A Sabedoria do Arquivista (IA)
+              </h3>
+              <p>
+                Nosso guardião arcano, O Arquivista, utiliza magia moderna
+                (Inteligência Artificial do Google) para ler suas estatísticas
+                e forjar visões sobre sua jornada. Ele analisa apenas seus
+                gêneros e horas jogadas, mas seus dados sensíveis permanecem
+                intocáveis.
               </p>
             </section>
 
@@ -604,9 +631,10 @@ function TermsModal({
                 O Selo de Cera (Privacidade)
               </h3>
               <p>
-                Seus dados de acesso — em especial o e-mail — são guardados com
-                segurança, sob o nosso selo. Não os compartilhamos com terceiros
-                nem os usamos fora do propósito de manter a sua ficha de escritor.
+                Seus dados de acesso — em especial o seu e-mail — são guardados
+                com segurança estrita, sob o nosso selo. Não os compartilhamos
+                com terceiros, nem os usamos fora do propósito de manter a sua
+                ficha de escritor a salvo.
               </p>
             </section>
           </div>
@@ -656,6 +684,8 @@ export default function AuthBook() {
   const [authErrorPage, setAuthErrorPage] = useState<"login" | "register" | null>(
     null,
   );
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
   const draftRef = useRef({
     email: "",
     password: "",
@@ -689,6 +719,7 @@ export default function AuthBook() {
     setAuthError(null);
     setAuthErrorPage(null);
     setAcceptedTerms(false);
+    setResetMessage(null);
     bookRef.current?.pageFlip?.()?.flip(1);
   }, []);
 
@@ -698,6 +729,7 @@ export default function AuthBook() {
     setAuthError(null);
     setAuthErrorPage(null);
     setAcceptedTerms(false);
+    setResetMessage(null);
     bookRef.current?.pageFlip?.()?.turnToPage(0);
   }, []);
 
@@ -710,6 +742,41 @@ export default function AuthBook() {
     setAuthError(null);
     setAuthErrorPage(null);
   }
+
+  async function handleResetPasswordFn(e: MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const email = draftRef.current.email.trim();
+    if (!email) {
+      showAuthError("login", "Preencha o campo de e-mail antes de recuperar a senha.");
+      return;
+    }
+
+    setResetLoading(true);
+    setResetMessage(null);
+    clearAuthError();
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    });
+
+    setResetLoading(false);
+
+    if (error) {
+      showAuthError("login", authErrorMessage(error.message));
+      return;
+    }
+
+    setResetMessage("Link de recuperação enviado! Verifique sua caixa de entrada, Escritor.");
+  }
+
+  const handleResetPasswordRef = useRef(handleResetPasswordFn);
+  handleResetPasswordRef.current = handleResetPasswordFn;
+
+  const handleResetPassword = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+    void handleResetPasswordRef.current(e);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -975,6 +1042,7 @@ export default function AuthBook() {
                     />
 
                     <AuthNotice message={authErrorPage === "login" ? authError : null} />
+                    <AuthSuccess message={resetMessage} />
 
                     <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-4">
                       <button
@@ -985,13 +1053,14 @@ export default function AuthBook() {
                         {loginLoading ? "Abrindo biblioteca…" : "Entrar"}
                       </button>
 
-                      <a
-                        href="#esqueceu-senha"
+                      <button
+                        type="button"
+                        disabled={resetLoading || loginLoading || isTransitioning}
+                        onClick={handleResetPassword}
                         className={textLinkClassName}
-                        onClick={(e) => e.preventDefault()}
                       >
-                        Esqueceu a senha?
-                      </a>
+                        {resetLoading ? "Enviando link…" : "Esqueceu a senha?"}
+                      </button>
 
                       <button
                         type="button"
@@ -1189,6 +1258,7 @@ export default function AuthBook() {
       birthDate,
       confirmPassword,
       email,
+      handleResetPassword,
       isTransitioning,
       loginLoading,
       name,
@@ -1198,6 +1268,8 @@ export default function AuthBook() {
       password,
       platform,
       registerLoading,
+      resetLoading,
+      resetMessage,
       submitLogin,
       submitRegister,
     ],

@@ -47,9 +47,8 @@ function emptySlots(): (FilledSlot | null)[] {
 
 export default function RankingModal({ onClose }: RankingModalProps) {
   const titleId = useId();
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
-  const [yearOptions, setYearOptions] = useState<number[]>([currentYear]);
+  const [year, setYear] = useState<number | null>(null);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [games, setGames] = useState<DiaryGame[]>([]);
   const [slots, setSlots] = useState<(FilledSlot | null)[]>(emptySlots);
   const [openSlot, setOpenSlot] = useState<RankPosition | null>(null);
@@ -102,12 +101,14 @@ export default function RankingModal({ onClose }: RankingModalProps) {
           .select("id, title, cover_url, start_time, end_time, is_cleared")
           .eq("user_id", user.id)
           .order("title", { ascending: true }),
-        supabase
-          .from("yearly_rankings")
-          .select("id, rank_position, game_id, year")
-          .eq("user_id", user.id)
-          .eq("year", year)
-          .order("rank_position", { ascending: true }),
+        (() => {
+          const base = supabase
+            .from("yearly_rankings")
+            .select("id, rank_position, game_id, year")
+            .eq("user_id", user.id)
+            .order("rank_position", { ascending: true });
+          return year !== null ? base.eq("year", year) : base;
+        })(),
       ]);
 
       if (!active) return;
@@ -125,13 +126,11 @@ export default function RankingModal({ onClose }: RankingModalProps) {
       >[];
       const byId = new Map(diary.map((game) => [game.id, game]));
 
-      const years = new Set<number>([currentYear]);
+      const years = new Set<number>();
       for (const game of diary) {
         if (!game.is_cleared) continue;
-        const endYear = yearOf(game.end_time);
-        const startYear = yearOf(game.start_time);
-        if (endYear) years.add(endYear);
-        if (startYear) years.add(startYear);
+        const y = yearOf(game.end_time) ?? yearOf(game.start_time);
+        if (y !== null) years.add(y);
       }
 
       const nextSlots = emptySlots();
@@ -149,7 +148,7 @@ export default function RankingModal({ onClose }: RankingModalProps) {
       }
 
       setGames(diary);
-      setYearOptions(Array.from(years).sort((a, b) => b - a));
+      setAvailableYears(Array.from(years).sort((a, b) => b - a));
       setSlots(nextSlots);
       setLoading(false);
     }
@@ -158,7 +157,7 @@ export default function RankingModal({ onClose }: RankingModalProps) {
     return () => {
       active = false;
     };
-  }, [year, currentYear]);
+  }, [year]);
 
   const takenIds = useMemo(() => {
     return new Set(
@@ -170,7 +169,7 @@ export default function RankingModal({ onClose }: RankingModalProps) {
     return games.filter(
       (game) =>
         Boolean(game.is_cleared) &&
-        playedInYear(game, year) &&
+        (year === null || playedInYear(game, year)) &&
         !takenIds.has(game.id),
     );
   }, [games, takenIds, year]);
@@ -184,7 +183,7 @@ export default function RankingModal({ onClose }: RankingModalProps) {
   }, [eligibleGames, gameQuery]);
 
   async function assignGame(position: RankPosition, game: DiaryGame) {
-    if (pendingPosition) return;
+    if (pendingPosition || year === null) return;
     setPendingPosition(position);
     setError(null);
 
@@ -320,13 +319,17 @@ export default function RankingModal({ onClose }: RankingModalProps) {
           </label>
           <select
             id="ranking-year"
-            value={year}
-            onChange={(event) => setYear(Number(event.target.value))}
+            value={year === null ? "" : year}
+            onChange={(event) => {
+              const val = event.target.value;
+              setYear(val === "" ? null : Number(val));
+            }}
             className="cursor-pointer border-b border-book-gold/30 bg-transparent pb-1 font-body text-sm text-book-gold transition-colors focus:border-book-gold focus:outline-none"
           >
-            {yearOptions.map((option) => (
-              <option key={option} value={option} className="bg-book-bg">
-                {option}
+            <option value="" className="bg-book-bg">Todos os Anos</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y} className="bg-book-bg">
+                {y}
               </option>
             ))}
           </select>
@@ -397,10 +400,10 @@ export default function RankingModal({ onClose }: RankingModalProps) {
                             current === position ? null : position,
                           );
                         }}
-                        disabled={busy}
-                        className="font-body text-sm text-book-gold/80 transition-colors hover:text-book-gold disabled:opacity-40"
+                        disabled={busy || year === null}
+                        className="font-body text-sm text-white transition-colors hover:text-book-gold disabled:opacity-40"
                       >
-                        {busy ? "Guardando…" : "Escolher jogo"}
+                        {busy ? "Guardando…" : year === null ? "Selecione um ano" : "Escolher jogo"}
                       </button>
                     )}
                   </div>

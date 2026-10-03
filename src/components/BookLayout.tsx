@@ -26,7 +26,7 @@ export default function BookLayout({
         "
       />
 
-      <div className="relative z-10 flex min-h-screen w-full max-w-6xl flex-col justify-center has-[.library-shell]:justify-start md:min-h-0 md:justify-center">
+      <div className="relative z-10 flex min-h-screen w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[1440px] flex-col justify-center has-[.library-shell]:justify-start md:min-h-0 md:justify-center">
         {children}
       </div>
     </div>

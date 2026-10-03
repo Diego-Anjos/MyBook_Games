@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Image from "next/image";
+import FriendProfileModal, { type FriendProfile } from "@/components/library/FriendProfileModal";
+import FriendBookModal, { type FriendForBook } from "@/components/library/FriendBookModal";
 
 interface FriendsModalProps {
   isOpen: boolean;
@@ -14,6 +16,8 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
   const [friends, setFriends] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+  const [selectedFriend, setSelectedFriend] = useState<FriendProfile | null>(null);
+  const [bookFriend, setBookFriend] = useState<FriendForBook | null>(null);
 
   useEffect(() => {
     if (isOpen) fetchFriends();
@@ -63,13 +67,19 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
       if (!user) throw new Error("Não autenticado");
 
       // 1. Busca o perfil pelo UID
+      // NOTA: Verificar no painel do Supabase se existe uma política RLS (Row Level Security)
+      // na tabela `profiles` que permita SELECT por usuários autenticados. Se esta query
+      // continuar retornando null indevidamente, a política pode estar bloqueando a leitura.
       const { data: friendProfile, error: searchError } = await supabase
         .from("profiles")
         .select("*")
         .eq("uid", searchUid)
-        .single();
+        .maybeSingle();
 
-      if (searchError || !friendProfile) throw new Error("Nenhum escritor encontrado com este UID.");
+      // .maybeSingle() retorna null graciosamente quando nenhum registro é encontrado,
+      // evitando o erro 406 que .single() lança via PostgREST.
+      if (searchError) throw searchError;
+      if (!friendProfile) throw new Error("Nenhum escritor encontrado com este UID.");
       if (friendProfile.id === user.id) throw new Error("Você não pode adicionar a si mesmo.");
 
       // 2. Verifica se já existe relação em QUALQUER direção (pendente ou aceita)
@@ -119,6 +129,7 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
   if (!isOpen) return null;
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-book-bg border border-book-gold/30 rounded-lg w-full max-w-lg md:max-w-2xl min-h-[500px] max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative">
         <button onClick={onClose} className="absolute top-6 right-6 text-book-gold/60 hover:text-book-gold transition-colors">
@@ -174,9 +185,14 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
               </div>
             ) : (
               friends.map((friend) => (
-                <div key={friend.id} className="flex items-center justify-between p-4 rounded-lg bg-black/20 border border-book-gold/10 hover:border-book-gold/30 transition-colors">
+                <button
+                  key={friend.id}
+                  type="button"
+                  onClick={() => setSelectedFriend(friend as FriendProfile)}
+                  className="w-full flex items-center justify-between p-4 rounded-lg bg-black/20 border border-book-gold/10 hover:border-book-gold/40 hover:bg-black/30 transition-colors text-left group"
+                >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full border border-book-gold/30 overflow-hidden relative shadow-md">
+                    <div className="w-12 h-12 rounded-full border border-book-gold/30 overflow-hidden relative shadow-md shrink-0">
                       {friend.avatar_url ? (
                         <Image
                           alt={friend.nickname || "Companheiro"}
@@ -191,16 +207,38 @@ export default function FriendsModal({ isOpen, onClose }: FriendsModalProps) {
                       )}
                     </div>
                     <div>
-                      <p className="text-book-paper text-base font-medium">{friend.nickname}</p>
+                      <p className="text-book-paper text-base font-medium group-hover:text-book-gold transition-colors">{friend.nickname}</p>
                       <p className="text-xs text-book-gold/60 font-mono tracking-widest mt-0.5">UID: {friend.uid}</p>
                     </div>
                   </div>
-                </div>
+                  {/* Indicador visual de clicável */}
+                  <svg className="w-4 h-4 text-book-gold/30 group-hover:text-book-gold/70 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               ))
             )}
           </div>
         </div>
       </div>
     </div>
+
+    {/* Modal de perfil do amigo */}
+    <FriendProfileModal
+      open={selectedFriend !== null}
+      friend={selectedFriend}
+      onClose={() => setSelectedFriend(null)}
+      onReadBook={(friend) => {
+        setBookFriend({ id: friend.id, nickname: friend.nickname });
+      }}
+    />
+
+    {/* Modal do livro do amigo (jogos zerados) */}
+    <FriendBookModal
+      open={bookFriend !== null}
+      friend={bookFriend}
+      onClose={() => setBookFriend(null)}
+    />
+    </>
   );
 }

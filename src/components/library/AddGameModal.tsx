@@ -271,9 +271,15 @@ export default function AddGameModal({
     const handle = window.setTimeout(() => {
       void (async () => {
         try {
+          // O cliente usa localStorage — envia o token explicitamente.
+          const { data: { session } } = await supabase.auth.getSession();
+          const authHeaders: HeadersInit = session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {};
+
           const response = await fetch(
             `/api/games/search?q=${encodeURIComponent(trimmed)}`,
-            { signal: controller.signal },
+            { signal: controller.signal, headers: authHeaders },
           );
 
           if (!response.ok) {
@@ -323,6 +329,31 @@ export default function AddGameModal({
     if (isSubmitting) return;
     if (!editingGame && !selectedGame) return;
 
+    // ── Validações de regras de negócio ─────────────────────────────────
+    const ratingNum = Number.parseFloat(rating);
+    if (!Number.isFinite(ratingNum) || ratingNum < 0 || ratingNum > 10) {
+      setFormError("A nota deve ser um número entre 0 e 10.");
+      return;
+    }
+
+    const playtimeRaw = playtime.trim();
+    if (playtimeRaw !== "") {
+      const playtimeNum = Number(playtimeRaw);
+      if (Number.isNaN(playtimeNum) || playtimeNum < 0) {
+        setFormError("As horas jogadas não podem ser um valor negativo.");
+        return;
+      }
+    }
+
+    const narrativeTrimmed = narrative.trim();
+    if (narrativeTrimmed.length > 2000) {
+      setFormError(
+        `O comentário/narrativa não pode ultrapassar 2000 caracteres (atual: ${narrativeTrimmed.length}).`,
+      );
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────
+
     const finished = endedAt != null;
     const platformLabel =
       PLATFORMS.find((item) => item.id === platform)?.label ?? "PC";
@@ -348,8 +379,8 @@ export default function AddGameModal({
 
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) {
+      setFormError("Sessão expirada. Faça login novamente.");
       setIsSubmitting(false);
-      alert("Sessão expirada. Faça login novamente.");
       return;
     }
 
@@ -364,14 +395,14 @@ export default function AddGameModal({
 
       if (error) {
         console.error("Erro detalhado do Supabase:", error);
-        alert("Erro ao salvar no banco de dados: " + error.message);
+        setFormError("Erro ao salvar no banco de dados: " + error.message);
         setIsSubmitting(false);
         return;
       }
 
       if (!data) {
         console.error("Erro detalhado do Supabase: update não devolveu o registro.");
-        alert("Erro ao salvar no banco de dados: o registro não foi confirmado.");
+        setFormError("Erro ao salvar no banco de dados: o registro não foi confirmado.");
         setIsSubmitting(false);
         return;
       }
@@ -415,10 +446,7 @@ export default function AddGameModal({
 
     if (response.error) {
       console.error("ERRO CRÍTICO AO SALVAR:", response.error);
-      alert(
-        "Erro ao salvar o jogo. Veja o console (F12). Mensagem: " +
-          response.error.message,
-      );
+      setFormError("Erro ao salvar o jogo. Mensagem: " + response.error.message);
       setIsSubmitting(false);
       return;
     }
@@ -429,7 +457,7 @@ export default function AddGameModal({
         "Erro detalhado do Supabase: insert não devolveu o registro.",
         response.data,
       );
-      alert("Erro ao salvar no banco de dados: o registro não foi confirmado.");
+      setFormError("Erro ao salvar no banco de dados: o registro não foi confirmado.");
       setIsSubmitting(false);
       return;
     }
@@ -642,7 +670,7 @@ export default function AddGameModal({
                   </span>
                   <DatePicker
                     selected={startedAt}
-                    onChange={(date) => {
+                    onChange={(date: Date | null) => {
                       setStartedAt(date);
                       if (endedAt && date && date > endedAt) {
                         setEndedAt(null);
@@ -669,7 +697,7 @@ export default function AddGameModal({
                   </span>
                   <DatePicker
                     selected={endedAt}
-                    onChange={(date) => {
+                    onChange={(date: Date | null) => {
                       if (startedAt && date && date < startedAt) {
                         setDateWarning(
                           "A jornada não pode terminar antes de começar!",
@@ -762,7 +790,9 @@ export default function AddGameModal({
                     Horas Jogadas
                   </span>
                   <input
-                    type="text"
+                    type="number"
+                    min={0}
+                    step={0.5}
                     value={playtime}
                     onChange={(e) => setPlaytime(e.target.value)}
                     placeholder="Ex: 45"
@@ -784,6 +814,7 @@ export default function AddGameModal({
                   value={narrative}
                   onChange={(e) => setNarrative(e.target.value)}
                   rows={5}
+                  maxLength={2000}
                   placeholder="Escreva o capítulo desta sessão…"
                   className="
                     w-full resize-none break-words whitespace-pre-wrap rounded-sm border border-book-gold/55

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { Clock, Sparkles, Star, Trophy, X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -103,11 +103,6 @@ type OracleModalProps = {
   onClose: () => void;
 };
 
-const EMPTY_STATS: QuickStats = {
-  totalHoras: 0,
-  mediaNotas: null,
-  totalZerados: 0,
-};
 
 function asNumber(value: number | string | null): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -280,22 +275,6 @@ function buildStats(
   };
 }
 
-function formatHours(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  const label = Number.isInteger(rounded)
-    ? String(rounded)
-    : rounded.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return `${label}h`;
-}
-
-function formatAverage(value: number | null): string {
-  if (value == null) return "—";
-  return value.toLocaleString("pt-BR", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
-}
-
 function formatTooltipValue(value: TooltipContentProps["payload"][number]["value"]): string {
   if (value == null) return "—";
   return Array.isArray(value) ? value.join(", ") : String(value);
@@ -324,7 +303,7 @@ function ChartPanel({ title, children }: { title: string; children: ReactNode })
       <h3 className="mb-4 font-display text-sm tracking-widest text-[#C9A84C] uppercase sm:text-base">
         {title}
       </h3>
-      <div className="h-64 w-full sm:h-72">{children}</div>
+      <div className="h-64 w-full sm:h-72 xl:h-80">{children}</div>
     </section>
   );
 }
@@ -337,24 +316,6 @@ function EmptyChart({ children }: { children: string }) {
   );
 }
 
-function QuickStat({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <article className="flex flex-col items-center justify-center border border-[#C9A84C]/40 bg-[#1A2D45] px-3 py-4 text-center">
-      <span className="mb-2 text-[#C9A84C]">{icon}</span>
-      <p className="font-body text-[10px] tracking-widest text-[#8C7335] uppercase">{label}</p>
-      <p className="mt-1 font-display text-3xl text-[#C9A84C]">{value}</p>
-    </article>
-  );
-}
-
 export default function OracleModal({ onClose }: OracleModalProps) {
   const titleId = useId();
   const [loadingGames, setLoadingGames] = useState(true);
@@ -364,7 +325,6 @@ export default function OracleModal({ onClose }: OracleModalProps) {
   const [genres, setGenres] = useState<NamedShare[]>([]);
   const [platforms, setPlatforms] = useState<NamedShare[]>([]);
   const [ratings, setRatings] = useState<RatingBucket[]>([]);
-  const [quickStats, setQuickStats] = useState<QuickStats>(EMPTY_STATS);
   const [hasGames, setHasGames] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const year = new Date().getFullYear();
@@ -416,6 +376,16 @@ export default function OracleModal({ onClose }: OracleModalProps) {
         return;
       }
 
+      // Resolve o apelido do usuário para personalizar a resposta da IA.
+      // Prioridade: nickname > primeiro nome > prefixo do e-mail.
+      const nickname: string =
+        (typeof user.user_metadata?.nickname === "string" &&
+          user.user_metadata.nickname.trim()) ||
+        (typeof user.user_metadata?.full_name === "string" &&
+          user.user_metadata.full_name.trim().split(" ")[0]) ||
+        user.email?.split("@")[0] ||
+        "Escritor";
+
       const { data, error: gamesError } = await supabase
         .from("games")
         .select("genres, platform, playtime, rating, start_time, end_time")
@@ -444,18 +414,23 @@ export default function OracleModal({ onClose }: OracleModalProps) {
       setGenres(nextGenres);
       setPlatforms(nextPlatforms);
       setRatings(nextRatings);
-      setQuickStats({
-        totalHoras: stats.totalHoras,
-        mediaNotas: stats.mediaNotas,
-        totalZerados: stats.totalZerados,
-      });
       setLoadingGames(false);
 
       try {
+        // O cliente Supabase usa localStorage (não cookies), por isso o token
+        // precisa ser enviado explicitamente para o route handler validar.
+        const { data: { session } } = await supabase.auth.getSession();
+
         const response = await fetch("/api/oracle", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(stats),
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token
+              ? { Authorization: `Bearer ${session.access_token}` }
+              : {}),
+          },
+          credentials: "include",
+          body: JSON.stringify({ ...stats, nickname }),
           signal: controller.signal,
         });
         const payload = (await response.json()) as { text?: unknown };
@@ -551,35 +526,12 @@ export default function OracleModal({ onClose }: OracleModalProps) {
             </p>
           ) : (
             <>
-              <section aria-label="Estatísticas rápidas">
-                <h3 className="mb-4 font-display text-sm tracking-widest text-[#C9A84C] uppercase">
-                  Estatísticas rápidas
-                </h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <QuickStat
-                    icon={<Clock className="h-5 w-5" aria-hidden />}
-                    label="Total de horas jogadas"
-                    value={formatHours(quickStats.totalHoras)}
-                  />
-                  <QuickStat
-                    icon={<Star className="h-5 w-5" aria-hidden />}
-                    label="Média de notas"
-                    value={formatAverage(quickStats.mediaNotas)}
-                  />
-                  <QuickStat
-                    icon={<Trophy className="h-5 w-5" aria-hidden />}
-                    label="Total de jogos zerados"
-                    value={String(quickStats.totalZerados)}
-                  />
-                </div>
-              </section>
-
               {!hasGames ? (
                 <p className="py-6 text-center font-body text-[#8C7335] italic">
                   Nenhuma jornada encerrada neste livro. Os gráficos aguardam o primeiro final.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:gap-8">
                   <ChartPanel title={`Atividade em ${year}`}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart<MonthActivity>

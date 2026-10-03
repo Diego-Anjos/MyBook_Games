@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { collectGenreNames, searchIgdbGames, translateGenre } from "@/lib/igdb/client";
 import type { IgdbSearchResult } from "@/lib/igdb/types";
+import { createClient } from "@/lib/supabase/server";
 
 const TRANSLATE_CHUNK_SIZE = 450;
 
@@ -78,7 +79,37 @@ async function withPortugueseSummaries(
   );
 }
 
+/**
+ * Valida o chamador via cookie (SSR) OU via `Authorization: Bearer` header
+ * (necessário quando o cliente usa localStorage-based Supabase auth).
+ */
+async function getAuthUser(request: NextRequest) {
+  const supabase = await createClient();
+
+  const authHeader = request.headers.get("Authorization");
+  const bearerToken =
+    authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+
+  if (bearerToken) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser(bearerToken);
+    if (user) return user;
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user ?? null;
+}
+
 export async function GET(request: NextRequest) {
+  // ── Guard: apenas usuários autenticados podem buscar jogos via IGDB ──
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
 
   if (!query) {
