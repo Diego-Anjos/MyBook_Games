@@ -42,7 +42,7 @@ function formatRating(rating: number): string {
 
 export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
   return (
-    <article className="relative flex h-full w-full flex-col bg-book-blue p-6 md:p-8">
+    <article className="relative flex h-full w-full flex-col bg-book-blue p-4 sm:p-6 md:p-8">
       <CornerOrnament className="top-1.5 left-1.5 border-t border-l" />
       <CornerOrnament className="top-1.5 right-1.5 border-t border-r" />
       <CornerOrnament className="bottom-1.5 left-1.5 border-b border-l" />
@@ -125,7 +125,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
           </div>
         </div>
 
-        <div className="mb-3 grid w-full shrink-0 grid-cols-2 gap-2 md:mb-6 md:gap-4">
+        <div className="mt-3 mb-3 grid w-full shrink-0 grid-cols-2 gap-2 md:mt-4 md:mb-6 md:gap-4">
           <SessionBlock
             label="Início"
             value={`${game.startedAt} · ${game.startTime}`}
@@ -229,7 +229,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
 
         <section
           aria-label="Comentários"
-          className="synopsis-scroll flex min-h-0 flex-1 flex-col overflow-y-auto border border-book-gold/25 bg-book-blue-light/25 px-2.5 py-2 md:px-3 md:py-2.5"
+          className="synopsis-scroll mt-2 md:mt-3 flex min-h-0 max-h-32 sm:max-h-44 md:max-h-none flex-1 flex-col overflow-y-auto border border-book-gold/25 bg-book-blue-light/25 px-2.5 py-2 md:px-3 md:py-2.5"
         >
           <span className="mb-1 shrink-0 font-display text-[0.55rem] tracking-[0.18em] text-book-gold/50 uppercase">
             Narrativa
