@@ -97,7 +97,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
         </button>
       </div>
 
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="synopsis-scroll flex h-full min-h-0 flex-col overflow-y-auto md:overflow-hidden">
         <div className="grid shrink-0 grid-cols-[4rem_1fr] gap-2 md:grid-cols-[1fr_2fr] md:gap-6">
           <div className="relative aspect-[3/4] w-full max-h-28 overflow-hidden rounded-sm border border-book-gold/30 bg-black/20 md:max-h-44">
             <Image
@@ -229,7 +229,7 @@ export default function GameCard({ game, onEdit, onDelete }: GameCardProps) {
 
         <section
           aria-label="Comentários"
-          className="synopsis-scroll mt-2 md:mt-3 flex min-h-0 max-h-32 sm:max-h-44 md:max-h-none flex-1 flex-col overflow-y-auto border border-book-gold/25 bg-book-blue-light/25 px-2.5 py-2 md:px-3 md:py-2.5"
+          className="synopsis-scroll mt-2 md:mt-3 flex min-h-[5rem] shrink-0 flex-col border border-book-gold/25 bg-book-blue-light/25 px-2.5 py-2 md:min-h-0 md:shrink md:flex-1 md:max-h-none md:overflow-y-auto md:px-3 md:py-2.5"
         >
           <span className="mb-1 shrink-0 font-display text-[0.55rem] tracking-[0.18em] text-book-gold/50 uppercase">
             Narrativa
