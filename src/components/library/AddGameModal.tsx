@@ -662,7 +662,7 @@ export default function AddGameModal({
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-4 md:px-6 md:py-5">
+            <div className="flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-4 pb-8 md:px-6 md:py-5 md:pb-6">
               <div className="flex w-full flex-col gap-4 md:flex-row md:gap-6">
                 <label className="relative flex w-full flex-col gap-1.5">
                   <span className="font-display text-[0.65rem] tracking-[0.18em] text-book-gold/55 uppercase">
@@ -824,35 +824,35 @@ export default function AddGameModal({
                   "
                 />
               </label>
-            </div>
 
-            <div className="shrink-0 space-y-3 border-t border-book-gold/20 px-4 md:px-6 py-4 pb-6 md:pb-4">
-              {formError ? (
-                <p
-                  role="alert"
-                  className="rounded-sm bg-book-paper px-3 py-2 text-center font-body text-sm text-red-900/80"
+              <div className="space-y-3 border-t border-book-gold/20 pt-5">
+                {formError ? (
+                  <p
+                    role="alert"
+                    className="rounded-sm bg-book-paper px-3 py-2 text-center font-body text-sm text-red-900/80"
+                  >
+                    {formError}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="
+                    flex w-full items-center justify-center md:w-auto
+                    rounded-sm px-4 py-3
+                    bg-gradient-to-b from-[#E8D08A] via-book-gold to-[#A8842E]
+                    font-display text-sm tracking-[0.12em] text-book-blue uppercase
+                    transition hover:brightness-105
+                    disabled:cursor-wait disabled:opacity-70
+                  "
                 >
-                  {formError}
-                </p>
-              ) : null}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="
-                  flex w-full items-center justify-center md:w-auto
-                  rounded-sm px-4 py-3
-                  bg-gradient-to-b from-[#E8D08A] via-book-gold to-[#A8842E]
-                  font-display text-sm tracking-[0.12em] text-book-blue uppercase
-                  transition hover:brightness-105
-                  disabled:cursor-wait disabled:opacity-70
-                "
-              >
-                {isSubmitting
-                  ? "Salvando..."
-                  : isEditing
-                    ? "Salvar Alterações"
-                    : "Registrar no Livro"}
-              </button>
+                  {isSubmitting
+                    ? "Salvando..."
+                    : isEditing
+                      ? "Salvar Alterações"
+                      : "Registrar no Livro"}
+                </button>
+              </div>
             </div>
           </form>
         ) : null}
