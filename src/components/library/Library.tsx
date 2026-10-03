@@ -133,6 +133,7 @@ export default function Library({ userName }: LibraryProps) {
             setSelectedYear={setSelectedYear}
             onAddGame={() => setAddOpen(true)}
             nickname={userName ?? "Escritor"}
+            allGames={games}
             filteredGames={filtered}
             onOpenGame={openChronicleGame}
           />

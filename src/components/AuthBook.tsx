@@ -477,16 +477,30 @@ function AuthSuccess({ message }: { message: string | null }) {
   );
 }
 
-function BookLoadingPlaceholder() {
+function BookLoadingPlaceholder({ scale = 1 }: { scale?: number }) {
   return (
     <div
-      className="
-        flex items-center justify-center rounded-sm bg-book-blue text-book-gold
-        shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.4)]
-      "
-      style={{ width: BOOK_WIDTH, height: BOOK_HEIGHT }}
+      className="relative mx-auto"
+      style={{ width: BOOK_WIDTH * scale, height: BOOK_HEIGHT * scale }}
     >
-      <p className="font-body text-sm text-book-gold/60">Abrindo a capa…</p>
+      <div
+        className="
+          absolute inset-0 flex items-center justify-center rounded-sm bg-book-blue text-book-gold
+          shadow-[0_25px_80px_-12px_rgba(0,0,0,0.75),0_0_0_1px_rgba(201,168,76,0.4)]
+        "
+        style={
+          scale < 1
+            ? {
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+                width: BOOK_WIDTH,
+                height: BOOK_HEIGHT,
+              }
+            : {}
+        }
+      >
+        <p className="font-body text-sm text-book-gold/60">Abrindo a capa…</p>
+      </div>
     </div>
   );
 }
@@ -681,6 +695,16 @@ export default function AuthBook() {
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  /**
+   * Fator de escala CSS aplicado ao livro para caber em telas pequenas.
+   * Inicializado de forma lazy para evitar layout-shift no primeiro render.
+   */
+  const [bookScale, setBookScale] = useState<number>(() => {
+    if (typeof window === "undefined") return 1;
+    const sw = Math.min(1, (window.innerWidth - 24) / BOOK_WIDTH);
+    const sh = Math.min(1, (window.innerHeight * 0.96) / BOOK_HEIGHT);
+    return Math.min(sw, sh);
+  });
   const [authErrorPage, setAuthErrorPage] = useState<"login" | "register" | null>(
     null,
   );
@@ -776,6 +800,20 @@ export default function AuthBook() {
 
   const handleResetPassword = useCallback((e: MouseEvent<HTMLButtonElement>) => {
     void handleResetPasswordRef.current(e);
+  }, []);
+
+  // Recalcula a escala quando a janela muda de tamanho (orientação, teclado virtual…)
+  useEffect(() => {
+    function updateScale() {
+      const hPad = 24; // 12 px de cada lado
+      const sw = Math.min(1, (window.innerWidth - hPad) / BOOK_WIDTH);
+      const sh = Math.min(1, (window.innerHeight * 0.96) / BOOK_HEIGHT);
+      setBookScale(Math.min(sw, sh));
+    }
+    // Garante que o valor está correto após a montagem
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
   }, []);
 
   useEffect(() => {
@@ -1082,14 +1120,14 @@ export default function AuthBook() {
                 {isTransitioning ? (
                   <TransitionFace />
                 ) : (
-                  <div className="flex h-full flex-col px-5 pt-4 pb-4 sm:px-9 sm:pt-5 sm:pb-5">
+                  <div className="flex h-full flex-col px-5 pt-4 pb-2 sm:px-9 sm:pt-5 sm:pb-4">
                     <FaceHeader title="Nova Ficha de Escritor" compact />
 
                     <form
                       onSubmit={submitRegister}
-                      className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-start gap-2 overflow-y-auto hide-scrollbar"
+                      className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-start gap-2.5 overflow-y-auto hide-scrollbar sm:gap-2"
                     >
-                      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3">
                         <IconField
                           id="register-name"
                           label="Nome"
@@ -1155,7 +1193,7 @@ export default function AuthBook() {
                         icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
                       />
 
-                      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 sm:gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3">
                         <IconField
                           id="register-password"
                           label="Senha"
@@ -1182,7 +1220,7 @@ export default function AuthBook() {
 
                       <AuthNotice message={authErrorPage === "register" ? authError : null} />
 
-                      <div className="relative z-40 mt-1 flex flex-col items-center gap-3 sm:mt-2 sm:gap-3.5">
+                      <div className="relative z-40 mt-1 flex flex-col items-center gap-3 pb-5 sm:mt-2 sm:gap-3.5 sm:pb-2">
                         <button
                           type="submit"
                           disabled={
@@ -1209,7 +1247,7 @@ export default function AuthBook() {
                           Já possui uma ficha? Acessar
                         </button>
 
-                        <label className="group mt-1 mb-2 flex cursor-pointer items-center justify-center gap-2">
+                        <label className="group mt-1 mb-1 flex cursor-pointer items-center justify-center gap-2">
                           <div className="relative flex items-center justify-center">
                             <input
                               type="checkbox"
@@ -1286,7 +1324,7 @@ export default function AuthBook() {
   if (!clientReady) {
     return (
       <div className="mx-auto my-auto flex w-full justify-center px-3 sm:px-4">
-        <BookLoadingPlaceholder />
+        <BookLoadingPlaceholder scale={bookScale} />
       </div>
     );
   }
@@ -1294,30 +1332,56 @@ export default function AuthBook() {
   return (
     <>
     <div className="mx-auto my-auto flex w-full justify-center px-3 sm:px-4">
-      <StableFlipBook
-        ref={bookRef}
-        className="auth-html-book mx-auto"
-        style={FLIP_BOOK_STYLE}
-        width={BOOK_WIDTH}
-        height={BOOK_HEIGHT}
-        size="fixed"
-        showCover={false}
-        drawShadow={true}
-        maxShadowOpacity={0.5}
-        usePortrait={true}
-        useMouseEvents={false}
-        swipeDistance={0}
-        showPageCorners={false}
-        disableFlipByClick={true}
-        clickEventForward={true}
-        mobileScrollSupport={true}
-        flippingTime={1000}
-        startPage={0}
-        autoSize={false}
-        startZIndex={0}
+      {/*
+        Wrapper de escala responsiva:
+        - O div externo reserva exatamente o espaço visual correto no fluxo.
+        - O div interno aplica CSS transform para adaptar o livro de largura
+          fixa (450 px) ao viewport sem quebrar a lógica interna do react-pageflip.
+      */}
+      <div
+        className="relative mx-auto"
+        style={{
+          width: BOOK_WIDTH * bookScale,
+          height: BOOK_HEIGHT * bookScale,
+        }}
       >
-        {bookPages}
-      </StableFlipBook>
+        <div
+          style={{
+            transform: bookScale < 1 ? `scale(${bookScale})` : undefined,
+            transformOrigin: "top left",
+            width: BOOK_WIDTH,
+            height: BOOK_HEIGHT,
+            position: "absolute",
+            top: 0,
+            left: 0,
+          }}
+        >
+          <StableFlipBook
+            ref={bookRef}
+            className="auth-html-book"
+            style={FLIP_BOOK_STYLE}
+            width={BOOK_WIDTH}
+            height={BOOK_HEIGHT}
+            size="fixed"
+            showCover={false}
+            drawShadow={true}
+            maxShadowOpacity={0.5}
+            usePortrait={true}
+            useMouseEvents={false}
+            swipeDistance={0}
+            showPageCorners={false}
+            disableFlipByClick={true}
+            clickEventForward={true}
+            mobileScrollSupport={true}
+            flippingTime={1000}
+            startPage={0}
+            autoSize={false}
+            startZIndex={0}
+          >
+            {bookPages}
+          </StableFlipBook>
+        </div>
+      </div>
     </div>
 
     {!splashDismissed ? <SplashScreen /> : null}

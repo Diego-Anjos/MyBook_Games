@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Calendar,
@@ -33,8 +33,17 @@ type LibraryHeaderProps = {
   onAddGame?: () => void;
   nickname?: string;
   avatarUrl?: string | null;
+  /** Lista completa de jogos (não filtrada) — usada para derivar anos e meses disponíveis. */
+  allGames?: Game[];
   filteredGames?: Game[];
   onOpenGame?: (game: Game, pageIndex: number) => void;
+};
+
+/** Nomes dos meses indexados por número (1–12). */
+const MONTH_LABELS: Record<number, string> = {
+  1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+  5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+  9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
 };
 
 function CornerFiligree({ className }: { className?: string }) {
@@ -160,6 +169,7 @@ export default function LibraryHeader({
   onAddGame,
   nickname = "Escritor",
   avatarUrl = null,
+  allGames = [],
   filteredGames = [],
   onOpenGame,
 }: LibraryHeaderProps) {
@@ -177,6 +187,35 @@ export default function LibraryHeader({
   const [portraitUrl, setPortraitUrl] = useState(avatarUrl ?? "");
   const [profilePlatform, setProfilePlatform] = useState("PC");
   const [timelineYear, setTimelineYear] = useState("Todos");
+
+  // ── Anos disponíveis no catálogo (dinâmico, ordem decrescente) ────────────
+  const availableCatalogYears = useMemo(() => {
+    const yearSet = new Set<string>();
+    for (const game of allGames) {
+      for (const iso of [game.sessionStart, game.sessionEnd]) {
+        if (!iso) continue;
+        const date = new Date(iso);
+        if (!Number.isNaN(date.getTime())) {
+          yearSet.add(date.getFullYear().toString());
+        }
+      }
+    }
+    return Array.from(yearSet).sort((a, b) => Number(b) - Number(a));
+  }, [allGames]);
+
+  // ── Meses disponíveis no catálogo (restringe ao ano selecionado) ──────────
+  const availableCatalogMonths = useMemo(() => {
+    const monthSet = new Set<number>();
+    for (const game of allGames) {
+      const iso = game.sessionStart || game.sessionEnd;
+      if (!iso) continue;
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) continue;
+      if (selectedYear !== "Todos" && date.getFullYear().toString() !== selectedYear) continue;
+      monthSet.add(date.getMonth() + 1); // 1 = Janeiro … 12 = Dezembro
+    }
+    return Array.from(monthSet).sort((a, b) => a - b);
+  }, [allGames, selectedYear]);
 
   const checkNotifications = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -496,6 +535,7 @@ export default function LibraryHeader({
           {/* Direita: Filtros (Mês/Ano) */}
           <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 md:gap-6 md:overflow-visible md:pb-0">
             <div className="flex items-center gap-3">
+                {/* Filtro de Mês — dinâmico conforme o ano selecionado */}
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
@@ -503,30 +543,30 @@ export default function LibraryHeader({
                   className="bg-transparent text-book-gold text-sm border-b border-book-gold/30 pb-1 focus:outline-none focus:border-book-gold cursor-pointer transition-colors"
                 >
                   <option value="Todos" className="bg-book-bg">Mês</option>
-                  <option value="1" className="bg-book-bg">Janeiro</option>
-                  <option value="2" className="bg-book-bg">Fevereiro</option>
-                  <option value="3" className="bg-book-bg">Março</option>
-                  <option value="4" className="bg-book-bg">Abril</option>
-                  <option value="5" className="bg-book-bg">Maio</option>
-                  <option value="6" className="bg-book-bg">Junho</option>
-                  <option value="7" className="bg-book-bg">Julho</option>
-                  <option value="8" className="bg-book-bg">Agosto</option>
-                  <option value="9" className="bg-book-bg">Setembro</option>
-                  <option value="10" className="bg-book-bg">Outubro</option>
-                  <option value="11" className="bg-book-bg">Novembro</option>
-                  <option value="12" className="bg-book-bg">Dezembro</option>
+                  {availableCatalogMonths.map((m) => (
+                    <option key={m} value={String(m)} className="bg-book-bg">
+                      {MONTH_LABELS[m]}
+                    </option>
+                  ))}
                 </select>
 
+                {/* Filtro de Ano — dinâmico com base nos jogos cadastrados */}
                 <select
                   value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    // Zera o mês ao trocar de ano para evitar filtro vazio
+                    setSelectedMonth("Todos");
+                  }}
                   aria-label="Filtrar por ano"
                   className="bg-transparent text-book-gold text-sm border-b border-book-gold/30 pb-1 focus:outline-none focus:border-book-gold cursor-pointer transition-colors"
                 >
                   <option value="Todos" className="bg-book-bg">Ano</option>
-                  <option value="2026" className="bg-book-bg">2026</option>
-                  <option value="2025" className="bg-book-bg">2025</option>
-                  <option value="2024" className="bg-book-bg">2024</option>
+                  {availableCatalogYears.map((year) => (
+                    <option key={year} value={year} className="bg-book-bg">
+                      {year}
+                    </option>
+                  ))}
                 </select>
               </div>
 
