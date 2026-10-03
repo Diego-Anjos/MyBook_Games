@@ -252,10 +252,7 @@ O projeto usa um **sistema de cores e tipografia** customizado, inspirado em liv
 
 **Diego**
 
-*Escritor do Tomo · Desenvolvedor Full Stack*
-
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/seu-perfil)
-[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/seu-usuario)
+*Escritor do Livro · Desenvolvedor Full Stack*
 
 </div>
 
