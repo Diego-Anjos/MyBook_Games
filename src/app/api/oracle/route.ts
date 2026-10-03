@@ -2,15 +2,20 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Modelos em ordem de preferência — apenas versões activas da API Gemini.
-// gemini-2.5-flash / gemini-2.0-flash foram descontinuados (retornam 404).
+// Modelo estável de produção suportado pela SDK @google/generative-ai.
+// gemini-3.8-flash responde 503 sob carga; 2.5-flash é o padrão estável.
+// Os seguintes só entram se o anterior falhar (404, 429 ou 503).
 const MODELS = [
-  "gemini-3.8-flash",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
   "gemini-3.5-flash-lite",
 ] as const;
 
 const ARCHIVIST_ERROR =
   "As páginas se fecham diante do Arquivista. Nenhuma análise pôde ser concluída desta vez, Escritor. Volte quando o livro estiver mais quieto.";
+
+const MANA_TURBULENCE =
+  "As linhas de mana estão turbulentas no momento. O Arquivista precisa de um instante para focar a visão. Volte em alguns instantes, Escritor.";
 
 /**
  * Instrução de sistema: define a persona "O Arquivista" e as regras de
@@ -178,7 +183,23 @@ function parseStats(value: unknown): OracleStats {
 }
 
 function prophecyResponse(text: string, fallback = false) {
-  return NextResponse.json({ text, fallback });
+  return NextResponse.json({ text, fallback }, { status: 200 });
+}
+
+/** 429/503 e equivalentes: cota, sobrecarga ou indisponibilidade temporária. */
+function isTransientGeminiError(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status: unknown }).status)
+      : NaN;
+
+  return (
+    status === 429 ||
+    status === 503 ||
+    /\b(429|503)\b/.test(message) ||
+    /service unavailable|too many requests|resource exhausted|unavailable|overloaded/i.test(message)
+  );
 }
 
 /**
@@ -248,42 +269,45 @@ export async function POST(request: Request) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const systemInstruction = buildSystemInstruction(nickname);
   const prompt = buildPrompt(stats, nickname);
+  let sawTransientError = false;
 
-  for (const modelName of MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        systemInstruction,
-        generationConfig: {
-          maxOutputTokens: 1024,
-          temperature: 0.92,
-        },
-      });
+  try {
+    for (const modelName of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction,
+          generationConfig: {
+            maxOutputTokens: 1024,
+            temperature: 0.92,
+          },
+        });
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text().trim();
-      if (text) return prophecyResponse(text, false);
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
+        if (text) return prophecyResponse(text, false);
 
-      console.error(`Arquivista: ${modelName} devolveu uma análise vazia`);
-    } catch (error) {
-      const errorStr = String(error);
-      const isServiceUnavailable =
-        errorStr.includes("503") || errorStr.toLowerCase().includes("service unavailable");
+        console.error(`Arquivista: ${modelName} devolveu uma análise vazia`);
+      } catch (error) {
+        if (isTransientGeminiError(error)) {
+          sawTransientError = true;
+          console.warn(
+            `Arquivista: ${modelName} indisponível (429/503). Tentando o próximo modelo.`,
+            error,
+          );
+          continue;
+        }
 
-      if (isServiceUnavailable) {
-        console.warn(`Arquivista: ${modelName} retornou 503 — serviço temporariamente indisponível.`);
-        // Retorna imediatamente com mensagem estilizada; não tenta os modelos de fallback,
-        // pois o problema é na infraestrutura do Google, não no modelo em si.
-        return prophecyResponse(
-          "As linhas de mana estão turbulentas e O Arquivista precisa de um momento para focar sua visão. Volte em alguns instantes, Escritor.",
-          true,
-        );
+        console.error(`Arquivista: falha no modelo ${modelName}`, error);
       }
-
-      console.error("Erro na API do Gemini:", error);
-      console.error(`Arquivista: falha no modelo ${modelName}`, error);
     }
+  } catch (error) {
+    console.error("Arquivista: falha inesperada ao consultar o Gemini", error);
+    return prophecyResponse(
+      isTransientGeminiError(error) ? MANA_TURBULENCE : ARCHIVIST_ERROR,
+      true,
+    );
   }
 
-  return prophecyResponse(ARCHIVIST_ERROR, true);
+  return prophecyResponse(sawTransientError ? MANA_TURBULENCE : ARCHIVIST_ERROR, true);
 }
